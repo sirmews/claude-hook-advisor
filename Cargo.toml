@@ -7,7 +7,7 @@ description = "A Claude Code hook that suggests better command alternatives base
 homepage = "https://github.com/sirmews/claude-hook-advisor"
 repository = "https://github.com/sirmews/claude-hook-advisor"
 license = "MIT OR Apache-2.0"
-keywords = ["claude", "hook", "cli", "prompt", "llm", "ai", "productivity", "developer-tools"]
+keywords = ["claude", "cli", "prompt", "llm", "ai"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
 
