@@ -73,7 +73,7 @@ ls = "eza"
 1. Run `/hooks` in Claude Code
 2. Select `PreToolUse`
 3. Add matcher: `Bash`
-4. Add hook command: `/path/to/claude-hook-advisor --hook`
+4. Add hook command: `claude-hook-advisor --hook`
 5. Save to project settings
 
 ### Option 2: Manual settings configuration
@@ -89,7 +89,7 @@ Add to your `.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "/path/to/claude-hook-advisor --hook"
+            "command": "claude-hook-advisor --hook"
           }
         ]
       }
@@ -98,27 +98,7 @@ Add to your `.claude/settings.json`:
 }
 ```
 
-### Option 3: Using absolute path after installation
-
-If you've installed via `make install`:
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.local/bin/claude-hook-advisor --hook"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
+**Note**: This assumes `claude-hook-advisor` is in your PATH. After `cargo install`, the binary is typically located at `~/.cargo/bin/claude-hook-advisor`.
 
 ## How It Works
 
@@ -189,9 +169,9 @@ The tool looks for configuration files in this order:
 ## Similar Tools
 
 This tool is inspired by and similar to:
-- `hashtag-search` (sibling Rust tool in this project)
 - Shell aliases (but works at the Claude Code level)
 - Git hooks (but for command execution)
+- Package manager configuration files
 
 ## Support
 
