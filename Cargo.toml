@@ -2,7 +2,14 @@
 name = "claude-hook-advisor"
 version = "0.1.0"
 edition = "2021"
+authors = ["Navishkar Rao <sirmews@gmail.com>"]
 description = "A Claude Code hook that suggests better command alternatives based on project preferences"
+homepage = "https://github.com/sirmews/claude-hook-advisor"
+repository = "https://github.com/sirmews/claude-hook-advisor"
+license = "MIT OR Apache-2.0"
+keywords = ["claude", "hook", "cli", "prompt", "llm", "ai", "productivity", "developer-tools"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

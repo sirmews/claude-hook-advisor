@@ -79,7 +79,7 @@ struct HookOutput {
 /// - Default: Show usage information
 fn main() -> Result<()> {
     let matches = Command::new("claude-hook-advisor")
-        .version("0.1.0")
+        .version(env!("CARGO_PKG_VERSION"))
         .about("Advises Claude Code on better command alternatives based on project preferences")
         .arg(
             Arg::new("config")
@@ -432,51 +432,57 @@ fn get_commands_for_project_type(project_type: &str) -> HashMap<String, String> 
 /// Prints detailed instructions for integrating with Claude Code.
 /// 
 /// Shows multiple integration options including the /hooks command and manual
-/// .claude/settings.json configuration. Automatically detects the binary path
-/// for accurate instructions.
+/// .claude/settings.json configuration. Uses const strings and format! for
+/// better maintainability.
 /// 
 /// # Returns
 /// * `Ok(())` - Instructions printed successfully
 /// * `Err` - If current executable path cannot be determined
 fn print_claude_integration_instructions() -> Result<()> {
-    println!("🔧 Claude Code Integration Setup:");
-    println!("==================================");
-    println!();
-    println!("To integrate with Claude Code, you have several options:");
-    println!();
-    println!("Option 1: Using the /hooks command in Claude Code");
-    println!("  1. Run `/hooks` in Claude Code");
-    println!("  2. Select `PreToolUse`");
-    println!("  3. Add matcher: `Bash`");
-
-    // Try to detect the binary location
     let binary_path = std::env::current_exe()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| "claude-hook-advisor".to_string());
 
-    println!("  4. Add hook command: `{binary_path} --hook`");
-    println!("  5. Save to project settings");
-    println!();
+    const HEADER: &str = r#"🔧 Claude Code Integration Setup:
+==================================
 
-    println!("Option 2: Manual .claude/settings.json configuration");
-    println!("Add this to your .claude/settings.json:");
-    println!();
-    println!("{{");
-    println!("  \"hooks\": {{");
-    println!("    \"PreToolUse\": [");
-    println!("      {{");
-    println!("        \"matcher\": \"Bash\",");
-    println!("        \"hooks\": [");
-    println!("          {{");
-    println!("            \"type\": \"command\",");
-    println!("            \"command\": \"{binary_path} --hook\"");
-    println!("          }}");
-    println!("        ]");
-    println!("      }}");
-    println!("    ]");
-    println!("  }}");
-    println!("}}");
-    println!();
+To integrate with Claude Code, you have several options:
+
+Option 1: Using the /hooks command in Claude Code
+  1. Run `/hooks` in Claude Code
+  2. Select `PreToolUse`
+  3. Add matcher: `Bash`"#;
+
+    const JSON_TEMPLATE: &str = r#"{{
+  "hooks": {{
+    "PreToolUse": [
+      {{
+        "matcher": "Bash",
+        "hooks": [
+          {{
+            "type": "command",
+            "command": "{} --hook"
+          }}
+        ]
+      }}
+    ]
+  }}
+}}"#;
+
+    print!(
+        r#"{HEADER}
+  4. Add hook command: `{binary_path} --hook`
+  5. Save to project settings
+
+Option 2: Manual .claude/settings.json configuration
+Add this to your .claude/settings.json:
+
+{json_config}
+
+"#,
+        binary_path = binary_path,
+        json_config = JSON_TEMPLATE.replace("{}", &binary_path)
+    );
 
     Ok(())
 }

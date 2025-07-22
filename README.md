@@ -11,20 +11,23 @@ A Rust CLI tool that advises Claude Code on better command alternatives based on
 
 ## Installation
 
-### Build and Install
+### From crates.io (Recommended)
+
+Install directly from crates.io using cargo:
 
 ```bash
-# Build the project
-make build
-
-# Install to ~/.local/bin (recommended)
-make install
-
-# Or install system-wide (requires sudo)
-make install-system
+cargo install claude-hook-advisor
 ```
 
-Make sure `~/.local/bin` is in your PATH if using `make install`.
+This installs the binary to `~/.cargo/bin/claude-hook-advisor` (make sure `~/.cargo/bin` is in your PATH).
+
+### From Source
+
+```bash
+git clone https://github.com/sirmews/claude-hook-advisor.git
+cd claude-hook-advisor
+make install
+```
 
 ## Configuration
 
