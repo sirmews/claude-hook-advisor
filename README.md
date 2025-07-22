@@ -1,6 +1,6 @@
 # Claude Hook Advisor
 
-A Rust CLI tool that advises Claude Code on better command alternatives based on project preferences. Similar to `hashtag-search`, this tool allows you to create per-project configurations that automatically suggest preferred commands when Claude Code tries to run specific commands.
+A Rust CLI tool that advises Claude Code on better command alternatives based on project preferences. Create per-project configurations that automatically suggest preferred commands when Claude Code tries to run specific commands.
 
 ## Features
 
