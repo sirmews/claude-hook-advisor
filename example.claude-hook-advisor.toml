@@ -1,0 +1,97 @@
+# Claude Hook Advisor Configuration Example
+# This file shows various command mapping examples for different use cases
+
+[commands]
+# ===== Node.js / JavaScript Development =====
+# Prefer Bun over npm/yarn for faster package management
+npm = "bun"
+yarn = "bun"
+pnpm = "bun"
+npx = "bunx"
+
+# ===== Python Development =====
+# Use uv for faster Python package management
+pip = "uv pip"
+"pip install" = "uv add"
+"pip uninstall" = "uv remove"
+python = "uv run python"
+
+# ===== Modern CLI Tool Replacements =====
+# Replace traditional tools with modern alternatives
+cat = "bat"                    # Syntax highlighting
+ls = "eza"                     # Better file listing
+find = "fd"                    # Faster file search
+grep = "rg"                    # Faster text search (ripgrep)
+curl = "wget --verbose"        # Alternative HTTP client
+wget = "curl -L"               # Alternative download tool
+
+# ===== Git Shortcuts =====
+# Encourage better git practices
+"git push" = "git push --set-upstream origin HEAD"
+"git commit" = "git commit -S"  # Always sign commits
+
+# ===== Docker Alternatives =====
+# Use Podman instead of Docker
+docker = "podman"
+"docker-compose" = "podman-compose"
+
+# ===== Build Tools =====
+# Prefer modern build tools
+make = "just"                  # Modern command runner
+cmake = "meson"               # Modern build system
+
+# ===== Text Editors =====
+# Encourage modern editors
+vim = "nvim"                  # Neovim instead of vim
+nano = "micro"                # Modern terminal editor
+
+# ===== System Monitoring =====
+# Modern system tools
+top = "htop"                  # Better process viewer
+ps = "procs"                  # Modern process viewer
+du = "dust"                   # Better disk usage
+
+# ===== Network Tools =====
+# Modern networking tools
+ping = "gping"                # Graphical ping
+netstat = "ss"                # Modern socket statistics
+
+# ===== File Operations =====
+# Safer file operations
+rm = "trash"                  # Move to trash instead of permanent delete
+cp = "cp -i"                  # Interactive copy (ask before overwrite)
+mv = "mv -i"                  # Interactive move (ask before overwrite)
+
+# ===== Package Managers by OS =====
+# Encourage consistent package managers
+apt = "nala"                  # Better apt frontend
+yum = "dnf"                   # Modern Red Hat package manager
+brew = "brew"                 # Keep Homebrew as-is (already good)
+
+# ===== Development Servers =====
+# Use modern development servers
+"python -m http.server" = "python -m http.server --bind 127.0.0.1"  # Bind to localhost only
+"php -S" = "php -S 127.0.0.1:8000"  # Secure PHP dev server
+
+# ===== Security Tools =====
+# Encourage secure practices
+ssh = "ssh -o VerifyHostKeyDNS=yes"  # Verify host keys via DNS
+scp = "rsync -avz --progress"        # Use rsync instead of scp
+
+# ===== Custom Project Commands =====
+# Project-specific shortcuts (examples)
+"npm start" = "bun dev"              # Use bun for dev server
+"npm test" = "bun test --watch"      # Watch mode for tests
+"npm run build" = "bun run build:prod"  # Production build
+
+# ===== Dangerous Command Replacements =====
+# Prevent accidental damage
+"rm -rf" = "echo 'Use trash command instead of rm -rf for safety'"
+"sudo rm" = "echo 'Consider using trash or be very careful with sudo rm'"
+"chmod 777" = "echo 'chmod 777 is dangerous, consider more restrictive permissions'"
+
+# ===== Environment-Specific =====
+# Different tools for different environments
+"kubectl" = "k9s"                   # Better Kubernetes interface
+"terraform" = "tofu"                # OpenTofu instead of Terraform
+"aws" = "aws --cli-auto-prompt"     # AWS CLI with auto-prompt

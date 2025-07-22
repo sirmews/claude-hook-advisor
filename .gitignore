@@ -1,0 +1,36 @@
+# Rust build artifacts
+/target/
+
+# Cargo lock file (generally included for binaries, excluded for libraries)
+# Since this is a binary, we keep Cargo.lock tracked
+
+# Debug info
+*.pdb
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*~
+*.bak
+
+# Local configuration that shouldn't be shared
+.env
+.env.local
+
+
+# Configs
+
+.claude-hook-advisor.toml
