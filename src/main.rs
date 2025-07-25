@@ -44,6 +44,117 @@ struct Config {
     /// Commands that should never be suggested (user explicitly rejected)
     #[serde(skip_serializing_if = "Option::is_none")]
     never_suggest: Option<HashMap<String, String>>,
+    /// Execution tracking for suggestion effectiveness measurement
+    #[serde(skip_serializing_if = "Option::is_none")]
+    execution_history: Option<ExecutionHistory>,
+}
+
+/// Execution tracking for measuring suggestion effectiveness and learning.
+/// 
+/// Tracks command execution results, suggestion acceptance rates, and user behavior
+/// patterns to enable dynamic confidence adjustment and never-suggest functionality.
+#[derive(Debug, Deserialize, Serialize)]
+struct ExecutionHistory {
+    /// Record of command executions with results and metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    command_executions: Option<Vec<CommandExecution>>,
+    /// Track suggestion effectiveness over time
+    #[serde(skip_serializing_if = "Option::is_none")]
+    suggestion_stats: Option<HashMap<String, SuggestionStats>>,
+    /// Mapping correlation tracking for learning validation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mapping_correlations: Option<HashMap<String, MappingCorrelation>>,
+    /// Track user overrides and corrections
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user_overrides: Option<Vec<UserOverride>>,
+}
+
+/// Record of a single command execution with results and context.
+/// 
+/// Used to correlate suggestion effectiveness with actual command success rates
+/// and enable dynamic confidence adjustment based on real-world outcomes.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct CommandExecution {
+    /// The command that was executed
+    command: String,
+    /// Whether this command was suggested by the system
+    was_suggested: bool,
+    /// The original command if this was a suggested replacement
+    original_command: Option<String>,
+    /// Exit code of the command execution
+    exit_code: Option<i32>,
+    /// Whether the command succeeded (exit code 0)
+    success: bool,
+    /// Duration of execution in milliseconds
+    duration_ms: Option<u64>,
+    /// When the command was executed
+    executed_at: DateTime<Utc>,
+    /// Which mapping source provided this suggestion (if any)
+    suggestion_source: Option<String>,
+    /// Session ID for correlation with other events
+    session_id: Option<String>,
+}
+
+/// Statistics for a specific command suggestion.
+/// 
+/// Tracks effectiveness metrics for individual command mappings to enable
+/// confidence adjustment and never-suggest functionality.
+#[derive(Debug, Deserialize, Serialize)]
+struct SuggestionStats {
+    /// Total number of times this suggestion was made
+    times_suggested: u32,
+    /// Number of times the user accepted the suggestion
+    times_accepted: u32,
+    /// Number of times the suggested command succeeded
+    times_successful: u32,
+    /// Number of times the user rejected or overrode the suggestion
+    times_rejected: u32,
+    /// Current effectiveness score (0.0 to 1.0)
+    effectiveness_score: f32,
+    /// When statistics were last updated
+    last_updated: DateTime<Utc>,
+}
+
+/// Correlation tracking between original and suggested commands.
+/// 
+/// Measures the effectiveness of specific mapping relationships to enable
+/// learning validation and automatic confidence adjustment.
+#[derive(Debug, Deserialize, Serialize)]
+struct MappingCorrelation {
+    /// Original command pattern
+    original_pattern: String,
+    /// Suggested replacement command
+    replacement_command: String,
+    /// Success rate when suggestion is accepted
+    success_rate: f32,
+    /// Total number of executions tracked
+    total_executions: u32,
+    /// Number of successful executions
+    successful_executions: u32,
+    /// Confidence adjustment based on correlation data
+    confidence_adjustment: f32,
+    /// When correlation was last calculated
+    last_calculated: DateTime<Utc>,
+}
+
+/// Record of a user override or correction.
+/// 
+/// Tracks when users manually change or reject suggestions to enable
+/// automatic learning from corrections and never-suggest functionality.
+#[derive(Debug, Deserialize, Serialize)]
+struct UserOverride {
+    /// The original suggested command
+    suggested_command: String,
+    /// The command the user actually ran (if detected)
+    actual_command: Option<String>,
+    /// Type of override (rejection, correction, manual_execution)
+    override_type: String,
+    /// When the override occurred
+    occurred_at: DateTime<Utc>,
+    /// Session ID for correlation
+    session_id: Option<String>,
+    /// Whether this should trigger never-suggest behavior
+    should_never_suggest: bool,
 }
 
 /// Learned command mappings organized by scope and context.
@@ -52,7 +163,7 @@ struct Config {
 /// - Global: Universal preferences across all projects
 /// - Project: Specific to the current project/directory
 /// - Context: Conditional mappings based on project type or environment
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct LearnedMappings {
     /// Global mappings that apply across all projects
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -69,7 +180,7 @@ struct LearnedMappings {
 /// 
 /// Contains all the information needed to make intelligent decisions about
 /// command suggestions, including confidence, timing, and learning source.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct LearnedMapping {
     /// The replacement command to suggest
     replacement: String,
@@ -91,7 +202,7 @@ struct LearnedMapping {
 /// 
 /// Tracks overall statistics and system state to enable analytics
 /// and debugging of the learning behavior.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct LearningMetadata {
     /// When the configuration was last updated
     last_updated: DateTime<Utc>,
@@ -178,6 +289,43 @@ struct UserPromptSubmitInput {
     prompt: String,
 }
 
+/// Input data received from Claude Code PostToolUse hook.
+/// 
+/// This struct represents the JSON data sent after a tool has been executed,
+/// containing information about the tool execution results and metadata.
+#[derive(Debug, Deserialize)]
+struct PostToolUseInput {
+    #[allow(dead_code)]
+    session_id: String,
+    #[allow(dead_code)]
+    transcript_path: String,
+    #[allow(dead_code)]
+    cwd: String,
+    #[allow(dead_code)]
+    hook_event_name: String,
+    tool_name: String,
+    tool_input: ToolInput,
+    tool_response: ToolResult,
+    #[allow(dead_code)]
+    tool_use_id: Option<String>,
+    #[allow(dead_code)]
+    duration_ms: Option<u64>,
+}
+
+/// Tool execution result from Claude Code.
+/// 
+/// Contains the output, error information, and exit status from tool execution.
+#[derive(Debug, Deserialize)]
+struct ToolResult {
+    #[allow(dead_code)]
+    output: Option<String>,
+    #[allow(dead_code)]
+    error: Option<String>,
+    exit_code: Option<i32>,
+    #[allow(dead_code)]
+    truncated: Option<bool>,
+}
+
 /// Generic hook input for auto-detection of hook types.
 /// 
 /// Used to parse the hook_event_name field first, then deserialize
@@ -251,6 +399,38 @@ fn main() -> Result<()> {
                 .help("Install and configure Claude Hook Advisor for this project")
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("list-learned")
+                .long("list-learned")
+                .help("List all learned command mappings with statistics")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("reset-learning")
+                .long("reset-learning")
+                .help("Reset all learned mappings (keeps static configuration)")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("confidence-report")
+                .long("confidence-report")
+                .help("Generate detailed confidence and effectiveness report")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("export-config")
+                .long("export-config")
+                .value_name("FILE")
+                .help("Export learned configuration to file")
+                .action(clap::ArgAction::Set),
+        )
+        .arg(
+            Arg::new("import-config")
+                .long("import-config")
+                .value_name("FILE")
+                .help("Import learned configuration from file")
+                .action(clap::ArgAction::Set),
+        )
         .get_matches();
 
     let config_path = matches.get_one::<String>("config").unwrap();
@@ -260,12 +440,610 @@ fn main() -> Result<()> {
         run_as_hook(config_path, replace_mode)
     } else if matches.get_flag("install") {
         run_installer(config_path)
+    } else if matches.get_flag("list-learned") {
+        list_learned_mappings(config_path)
+    } else if matches.get_flag("reset-learning") {
+        reset_learning_data(config_path)
+    } else if matches.get_flag("confidence-report") {
+        generate_confidence_report(config_path)
+    } else if let Some(export_file) = matches.get_one::<String>("export-config") {
+        export_learned_config(config_path, export_file)
+    } else if let Some(import_file) = matches.get_one::<String>("import-config") {
+        import_learned_config(config_path, import_file)
     } else {
-        println!("Claude Hook Advisor");
-        println!("Use --hook flag to run as a Claude Code hook");
-        println!("Use --install flag to set up configuration for this project");
+        println!("Claude Hook Advisor - Intelligent Command Suggestion System");
+        println!("============================================================");
+        println!();
+        println!("Usage:");
+        println!("  --hook                 Run as Claude Code hook (reads JSON from stdin)");
+        println!("  --install              Set up configuration for this project");
+        println!("  --list-learned         List all learned command mappings");
+        println!("  --reset-learning       Reset all learned mappings");
+        println!("  --confidence-report    Generate detailed effectiveness report");
+        println!("  --export-config FILE   Export learned configuration");
+        println!("  --import-config FILE   Import learned configuration");
+        println!();
+        println!("For integration with Claude Code, use --install or --hook");
         Ok(())
     }
+}
+
+/// Lists all learned command mappings with their statistics and metadata.
+/// 
+/// Displays learned mappings organized by scope (global, project, context) along with
+/// confidence scores, usage statistics, and effectiveness information.
+fn list_learned_mappings(config_path: &str) -> Result<()> {
+    let config = load_config(config_path)?;
+    
+    println!("📚 Learned Command Mappings");
+    println!("============================");
+    println!();
+    
+    let mut total_mappings = 0;
+    
+    if let Some(ref learned) = config.learned {
+        // Display global mappings
+        if let Some(ref global) = learned.global {
+            if !global.is_empty() {
+                println!("🌍 Global Mappings:");
+                for (original, mapping) in global {
+                    print_mapping_info(original, mapping, "global");
+                    total_mappings += 1;
+                }
+                println!();
+            }
+        }
+        
+        // Display project mappings
+        if let Some(ref project) = learned.project {
+            if !project.is_empty() {
+                println!("📁 Project Mappings:");
+                for (original, mapping) in project {
+                    print_mapping_info(original, mapping, "project");
+                    total_mappings += 1;
+                }
+                println!();
+            }
+        }
+        
+        // Display context mappings
+        if let Some(ref context) = learned.context {
+            for (context_name, mappings) in context {
+                if !mappings.is_empty() {
+                    println!("🏷️  Context Mappings ({context_name}):");
+                    for (original, mapping) in mappings {
+                        print_mapping_info(original, mapping, context_name);
+                        total_mappings += 1;
+                    }
+                    println!();
+                }
+            }
+        }
+    }
+    
+    // Display summary statistics
+    if total_mappings == 0 {
+        println!("ℹ️  No learned mappings found. Use natural language like 'use bun instead of npm' to teach the system.");
+    } else {
+        println!("📊 Summary: {total_mappings} learned mappings");
+        
+        if let Some(ref meta) = config.learning_meta {
+            println!("   Last updated: {}", meta.last_updated.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!("   Total learned: {}", meta.total_mappings_learned);
+        }
+    }
+    
+    Ok(())
+}
+
+/// Prints detailed information about a single mapping.
+fn print_mapping_info(original: &str, mapping: &LearnedMapping, scope: &str) {
+    println!(
+        "  {} → {} (confidence: {:.1}%, learned: {}, from: {})",
+        original,
+        mapping.replacement,
+        mapping.confidence * 100.0,
+        mapping.learned_at.format("%Y-%m-%d"),
+        mapping.learned_from
+    );
+    
+    if let Some(usage_count) = mapping.usage_count {
+        println!("    Usage count: {usage_count} times");
+    }
+    
+    if scope != "global" {
+        println!("    Scope: {scope}");
+    }
+}
+
+/// Resets all learned mapping data while preserving static configuration.
+/// 
+/// Prompts for confirmation before removing learned mappings, statistics,
+/// and execution history. Keeps static command mappings intact.
+fn reset_learning_data(config_path: &str) -> Result<()> {
+    println!("🔄 Reset Learning Data");
+    println!("=====================");
+    println!();
+    
+    let mut config = load_config(config_path)?;
+    
+    // Count current learned mappings for confirmation
+    let learned_count = count_learned_mappings(&config);
+    
+    if learned_count == 0 {
+        println!("ℹ️  No learned data to reset.");
+        return Ok(());
+    }
+    
+    println!("⚠️  This will remove:");
+    println!("   • {learned_count} learned command mappings");
+    println!("   • All execution history and statistics");
+    println!("   • All confidence scores and effectiveness data");
+    println!();
+    println!("Static command mappings from your configuration will be preserved.");
+    println!();
+    print!("Are you sure you want to reset all learning data? (y/N): ");
+    io::stdout().flush()?;
+    
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    
+    if !input.trim().to_lowercase().starts_with('y') {
+        println!("Reset cancelled.");
+        return Ok(());
+    }
+    
+    // Reset all learning-related data
+    config.learned = Some(LearnedMappings {
+        global: Some(HashMap::new()),
+        project: Some(HashMap::new()),
+        context: Some(HashMap::new()),
+    });
+    config.execution_history = Some(ExecutionHistory {
+        command_executions: Some(Vec::new()),
+        suggestion_stats: Some(HashMap::new()),
+        mapping_correlations: Some(HashMap::new()),
+        user_overrides: Some(Vec::new()),
+    });
+    config.confidence_scores = Some(HashMap::new());
+    config.never_suggest = Some(HashMap::new());
+    
+    // Update metadata
+    if let Some(ref mut meta) = config.learning_meta {
+        meta.total_mappings_learned = 0;
+        meta.session_mappings = 0;
+        meta.user_corrections = 0;
+        meta.last_updated = Utc::now();
+    }
+    
+    // Save the reset configuration
+    save_config_atomic(config_path, &config)?;
+    
+    println!("✅ Learning data has been reset successfully.");
+    println!("   The system will start learning from scratch while keeping your static configuration.");
+    
+    Ok(())
+}
+
+/// Counts the total number of learned mappings across all scopes.
+fn count_learned_mappings(config: &Config) -> usize {
+    let mut count = 0;
+    
+    if let Some(ref learned) = config.learned {
+        count += learned.global.as_ref().map(|m| m.len()).unwrap_or(0);
+        count += learned.project.as_ref().map(|m| m.len()).unwrap_or(0);
+        count += learned.context.as_ref()
+            .map(|contexts| contexts.values().map(|m| m.len()).sum())
+            .unwrap_or(0);
+    }
+    
+    count
+}
+
+/// Generates a detailed confidence and effectiveness report.
+/// 
+/// Analyzes learning performance, suggestion effectiveness, command execution
+/// patterns, and provides insights for system optimization.
+fn generate_confidence_report(config_path: &str) -> Result<()> {
+    let config = load_config(config_path)?;
+    
+    println!("📊 Confidence and Effectiveness Report");
+    println!("=====================================");
+    println!();
+    
+    // System overview
+    print_system_overview(&config);
+    println!();
+    
+    // Mapping confidence analysis
+    print_confidence_analysis(&config);
+    println!();
+    
+    // Execution statistics
+    print_execution_statistics(&config);
+    println!();
+    
+    // Suggestion effectiveness
+    print_suggestion_effectiveness(&config);
+    println!();
+    
+    // Never-suggest analysis
+    print_never_suggest_analysis(&config);
+    
+    Ok(())
+}
+
+/// Prints system overview statistics.
+fn print_system_overview(config: &Config) {
+    println!("🏠 System Overview");
+    println!("------------------");
+    
+    let learned_count = count_learned_mappings(config);
+    let static_count = config.commands.len();
+    let never_suggest_count = config.never_suggest.as_ref().map(|m| m.len()).unwrap_or(0);
+    
+    println!("Total mappings: {} (learned: {}, static: {})", 
+             learned_count + static_count, learned_count, static_count);
+    println!("Never-suggest entries: {never_suggest_count}");
+    
+    if let Some(ref meta) = config.learning_meta {
+        println!("Learning version: {}", meta.version);
+        println!("Last updated: {}", meta.last_updated.format("%Y-%m-%d %H:%M:%S UTC"));
+        println!("Total learned: {}", meta.total_mappings_learned);
+        println!("User corrections: {}", meta.user_corrections);
+    }
+    
+    if let Some(ref history) = config.execution_history {
+        let execution_count = history.command_executions.as_ref().map(|e| e.len()).unwrap_or(0);
+        let stats_count = history.suggestion_stats.as_ref().map(|s| s.len()).unwrap_or(0);
+        println!("Command executions tracked: {execution_count}");
+        println!("Suggestion statistics: {stats_count}");
+    }
+}
+
+/// Prints confidence analysis for learned mappings.
+fn print_confidence_analysis(config: &Config) {
+    println!("🎯 Confidence Analysis");
+    println!("----------------------");
+    
+    let mut confidence_data = Vec::new();
+    
+    if let Some(ref learned) = config.learned {
+        // Collect confidence scores from all mappings
+        if let Some(ref global) = learned.global {
+            for (cmd, mapping) in global {
+                confidence_data.push((cmd.clone(), mapping.confidence, "global"));
+            }
+        }
+        
+        if let Some(ref project) = learned.project {
+            for (cmd, mapping) in project {
+                confidence_data.push((cmd.clone(), mapping.confidence, "project"));
+            }
+        }
+        
+        if let Some(ref context) = learned.context {
+            for (context_name, mappings) in context {
+                for (cmd, mapping) in mappings {
+                    confidence_data.push((cmd.clone(), mapping.confidence, context_name));
+                }
+            }
+        }
+    }
+    
+    if confidence_data.is_empty() {
+        println!("No learned mappings to analyze.");
+        return;
+    }
+    
+    // Sort by confidence (highest first)
+    confidence_data.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    
+    // Calculate statistics
+    let _total = confidence_data.len();
+    let high_confidence = confidence_data.iter().filter(|(_, conf, _)| *conf >= 0.8).count();
+    let medium_confidence = confidence_data.iter().filter(|(_, conf, _)| *conf >= 0.5 && *conf < 0.8).count();
+    let low_confidence = confidence_data.iter().filter(|(_, conf, _)| *conf < 0.5).count();
+    
+    println!("High confidence (≥80%): {high_confidence} mappings");
+    println!("Medium confidence (50-79%): {medium_confidence} mappings");
+    println!("Low confidence (<50%): {low_confidence} mappings");
+    println!();
+    
+    // Show top 5 and bottom 5
+    println!("🏆 Highest Confidence Mappings:");
+    for (cmd, conf, scope) in confidence_data.iter().take(5) {
+        println!("  {} ({:.1}%, {scope})", cmd, conf * 100.0);
+    }
+    
+    if low_confidence > 0 {
+        println!();
+        println!("⚠️  Lowest Confidence Mappings:");
+        for (cmd, conf, scope) in confidence_data.iter().rev().take(5) {
+            println!("  {} ({:.1}%, {scope})", cmd, conf * 100.0);
+        }
+    }
+}
+
+/// Prints execution statistics and patterns.
+fn print_execution_statistics(config: &Config) {
+    println!("⚡ Execution Statistics");
+    println!("----------------------");
+    
+    if let Some(ref history) = config.execution_history {
+        if let Some(ref executions) = history.command_executions {
+            if executions.is_empty() {
+                println!("No command executions recorded yet.");
+                return;
+            }
+            
+            let total_executions = executions.len();
+            let successful_executions = executions.iter().filter(|e| e.success).count();
+            let suggested_executions = executions.iter().filter(|e| e.was_suggested).count();
+            
+            println!("Total executions: {total_executions}");
+            println!("Successful executions: {} ({:.1}%)", 
+                     successful_executions, 
+                     (successful_executions as f32 / total_executions as f32) * 100.0);
+            println!("Suggested command executions: {} ({:.1}%)",
+                     suggested_executions,
+                     (suggested_executions as f32 / total_executions as f32) * 100.0);
+            
+            // Calculate average execution time if available
+            let timed_executions: Vec<_> = executions.iter()
+                .filter_map(|e| e.duration_ms)
+                .collect();
+            
+            if !timed_executions.is_empty() {
+                let avg_duration = timed_executions.iter().sum::<u64>() as f32 / timed_executions.len() as f32;
+                println!("Average execution time: {avg_duration:.1}ms");
+            }
+        }
+    } else {
+        println!("No execution history available.");
+    }
+}
+
+/// Prints suggestion effectiveness analysis.
+fn print_suggestion_effectiveness(config: &Config) {
+    println!("🎯 Suggestion Effectiveness");
+    println!("---------------------------");
+    
+    if let Some(ref history) = config.execution_history {
+        if let Some(ref stats) = history.suggestion_stats {
+            if stats.is_empty() {
+                println!("No suggestion statistics available yet.");
+                return;
+            }
+            
+            let mut effectiveness_data: Vec<_> = stats.iter().collect();
+            effectiveness_data.sort_by(|a, b| b.1.effectiveness_score.partial_cmp(&a.1.effectiveness_score).unwrap());
+            
+            let total_suggestions = stats.len();
+            let highly_effective = stats.values().filter(|s| s.effectiveness_score >= 0.8).count();
+            let moderately_effective = stats.values().filter(|s| s.effectiveness_score >= 0.5 && s.effectiveness_score < 0.8).count();
+            let low_effective = stats.values().filter(|s| s.effectiveness_score < 0.5).count();
+            
+            println!("Total suggestion types: {total_suggestions}");
+            println!("Highly effective (≥80%): {highly_effective} suggestions");
+            println!("Moderately effective (50-79%): {moderately_effective} suggestions");
+            println!("Low effectiveness (<50%): {low_effective} suggestions");
+            println!();
+            
+            println!("🏆 Most Effective Suggestions:");
+            for (mapping, stats) in effectiveness_data.iter().take(5) {
+                println!("  {} (success: {:.1}%, attempts: {})", 
+                         mapping, 
+                         stats.effectiveness_score * 100.0,
+                         stats.times_accepted);
+            }
+            
+            if low_effective > 0 {
+                println!();
+                println!("⚠️  Least Effective Suggestions:");
+                for (mapping, stats) in effectiveness_data.iter().rev().take(5) {
+                    if stats.effectiveness_score < 0.8 {
+                        println!("  {} (success: {:.1}%, attempts: {})", 
+                                 mapping, 
+                                 stats.effectiveness_score * 100.0,
+                                 stats.times_accepted);
+                    }
+                }
+            }
+        }
+    } else {
+        println!("No suggestion effectiveness data available.");
+    }
+}
+
+/// Prints never-suggest analysis.
+fn print_never_suggest_analysis(config: &Config) {
+    println!("🚫 Never-Suggest Analysis");
+    println!("-------------------------");
+    
+    if let Some(ref never_suggest) = config.never_suggest {
+        if never_suggest.is_empty() {
+            println!("No never-suggest entries. This indicates suggestions are generally effective.");
+        } else {
+            println!("Never-suggest entries: {}", never_suggest.len());
+            println!();
+            println!("Blocked suggestions:");
+            for (original, replacement) in never_suggest {
+                println!("  {original} → {replacement} (automatically blocked due to poor performance)");
+            }
+        }
+    } else {
+        println!("Never-suggest functionality not initialized.");
+    }
+}
+
+/// Exports learned configuration to a file.
+/// 
+/// Creates a portable configuration file containing only learned mappings,
+/// statistics, and metadata that can be imported into other instances.
+fn export_learned_config(config_path: &str, export_file: &str) -> Result<()> {
+    let config = load_config(config_path)?;
+    
+    println!("📤 Exporting Learned Configuration");
+    println!("==================================");
+    
+    // Create export structure with only learned data
+    let export_config = Config {
+        commands: HashMap::new(), // Don't export static commands
+        learned: config.learned.clone(),
+        learning_meta: config.learning_meta.clone(),
+        confidence_scores: config.confidence_scores.clone(),
+        never_suggest: config.never_suggest.clone(),
+        execution_history: None, // Don't export execution history for privacy
+    };
+    
+    let learned_count = count_learned_mappings(&export_config);
+    
+    if learned_count == 0 {
+        println!("⚠️  No learned mappings to export.");
+        return Ok(());
+    }
+    
+    // Generate export content
+    let export_content = toml::to_string_pretty(&export_config)
+        .context("Failed to serialize export configuration")?;
+    
+    let header = format!(
+        "# Claude Hook Advisor - Exported Learned Configuration\n\
+         # Exported on: {}\n\
+         # Contains {} learned mappings\n\
+         # \n\
+         # This file contains only learned preferences and can be imported\n\
+         # into other claude-hook-advisor instances using --import-config\n\n",
+        Utc::now().to_rfc3339(),
+        learned_count
+    );
+    
+    let full_content = format!("{header}{export_content}");
+    
+    // Write export file
+    fs::write(export_file, &full_content)
+        .with_context(|| format!("Failed to write export file: {export_file}"))?;
+    
+    println!("✅ Successfully exported {learned_count} learned mappings to: {export_file}");
+    
+    if let Some(ref meta) = export_config.learning_meta {
+        println!("   Export includes {} total historical mappings", meta.total_mappings_learned);
+    }
+    
+    Ok(())
+}
+
+/// Imports learned configuration from a file.
+/// 
+/// Merges learned mappings from an export file into the current configuration,
+/// resolving conflicts by preferring existing mappings with higher confidence.
+fn import_learned_config(config_path: &str, import_file: &str) -> Result<()> {
+    println!("📥 Importing Learned Configuration");
+    println!("==================================");
+    
+    // Load import file
+    let import_content = fs::read_to_string(import_file)
+        .with_context(|| format!("Failed to read import file: {import_file}"))?;
+    
+    let import_config: Config = toml::from_str(&import_content)
+        .with_context(|| format!("Failed to parse import file: {import_file}"))?;
+    
+    let import_count = count_learned_mappings(&import_config);
+    
+    if import_count == 0 {
+        println!("⚠️  No learned mappings found in import file.");
+        return Ok(());
+    }
+    
+    println!("Found {import_count} learned mappings in import file.");
+    
+    // Load current configuration
+    let mut config = load_config(config_path)?;
+    let original_count = count_learned_mappings(&config);
+    
+    // Merge configurations
+    let merged_count = merge_learned_mappings(&mut config, &import_config)?;
+    
+    // Save merged configuration
+    save_config_atomic(config_path, &config)?;
+    
+    let final_count = count_learned_mappings(&config);
+    
+    println!("✅ Import completed successfully!");
+    println!("   Original mappings: {original_count}");
+    println!("   Imported mappings: {import_count}");
+    println!("   New mappings added: {merged_count}");
+    println!("   Total mappings now: {final_count}");
+    
+    Ok(())
+}
+
+/// Merges learned mappings from import config into target config.
+/// 
+/// Returns the number of new mappings that were added.
+fn merge_learned_mappings(target: &mut Config, source: &Config) -> Result<u32> {
+    let mut added_count = 0;
+    
+    // Initialize target learned mappings if needed
+    if target.learned.is_none() {
+        target.learned = Some(LearnedMappings {
+            global: Some(HashMap::new()),
+            project: Some(HashMap::new()),
+            context: Some(HashMap::new()),
+        });
+    }
+    
+    let target_learned = target.learned.as_mut().unwrap();
+    
+    if let Some(ref source_learned) = source.learned {
+        // Merge global mappings
+        if let Some(ref source_global) = source_learned.global {
+            let target_global = target_learned.global.get_or_insert_with(HashMap::new);
+            for (cmd, mapping) in source_global {
+                if !target_global.contains_key(cmd) {
+                    target_global.insert(cmd.clone(), mapping.clone());
+                    added_count += 1;
+                    eprintln!("📥 Added global mapping: {} → {}", cmd, mapping.replacement);
+                }
+            }
+        }
+        
+        // Merge project mappings
+        if let Some(ref source_project) = source_learned.project {
+            let target_project = target_learned.project.get_or_insert_with(HashMap::new);
+            for (cmd, mapping) in source_project {
+                if !target_project.contains_key(cmd) {
+                    target_project.insert(cmd.clone(), mapping.clone());
+                    added_count += 1;
+                    eprintln!("📥 Added project mapping: {} → {}", cmd, mapping.replacement);
+                }
+            }
+        }
+        
+        // Merge context mappings
+        if let Some(ref source_context) = source_learned.context {
+            let target_context = target_learned.context.get_or_insert_with(HashMap::new);
+            for (context_name, source_mappings) in source_context {
+                let target_mappings = target_context.entry(context_name.clone()).or_default();
+                for (cmd, mapping) in source_mappings {
+                    if !target_mappings.contains_key(cmd) {
+                        target_mappings.insert(cmd.clone(), mapping.clone());
+                        added_count += 1;
+                        eprintln!("📥 Added context mapping ({}): {} → {}", context_name, cmd, mapping.replacement);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Update metadata
+    if let Some(ref mut target_meta) = target.learning_meta {
+        target_meta.total_mappings_learned += added_count;
+        target_meta.last_updated = Utc::now();
+    }
+    
+    Ok(added_count)
 }
 
 /// Runs the application as a Claude Code hook with auto-detection of hook type.
@@ -300,6 +1078,11 @@ fn run_as_hook(config_path: &str, replace_mode: bool) -> Result<()> {
             let hook_input: UserPromptSubmitInput = serde_json::from_str(&buffer)
                 .context("Failed to parse UserPromptSubmit input JSON")?;
             handle_user_prompt_submit(hook_input, config_path)
+        }
+        "PostToolUse" => {
+            let hook_input: PostToolUseInput = serde_json::from_str(&buffer)
+                .context("Failed to parse PostToolUse input JSON")?;
+            handle_post_tool_use(hook_input, config_path)
         }
         _ => {
             eprintln!("Warning: Unknown hook event type: {}", generic_input.hook_event_name);
@@ -400,6 +1183,576 @@ fn handle_user_prompt_submit(hook_input: UserPromptSubmitInput, config_path: &st
     }
     
     // Always allow prompt to proceed normally
+    Ok(())
+}
+
+/// Handles PostToolUse hook events for execution result validation and learning.
+/// 
+/// Analyzes tool execution results to update suggestion effectiveness, adjust
+/// confidence scores, and detect user overrides. Only processes Bash commands.
+fn handle_post_tool_use(hook_input: PostToolUseInput, config_path: &str) -> Result<()> {
+    // Only process Bash commands
+    if hook_input.tool_name != "Bash" {
+        return Ok(());
+    }
+
+    // Load current configuration
+    let mut config = load_config(config_path)?;
+    
+    // Create command execution record
+    // Note: PostToolUse hooks only fire for successful tool completions in Claude Code
+    // If exit_code is None, we assume success since the hook was triggered
+    let actual_exit_code = hook_input.tool_response.exit_code.unwrap_or(0);
+    let execution = CommandExecution {
+        command: hook_input.tool_input.command.clone(),
+        was_suggested: false, // Will be determined by correlation analysis
+        original_command: None, // Will be populated if this was a suggestion
+        exit_code: Some(actual_exit_code),
+        success: actual_exit_code == 0,
+        duration_ms: hook_input.duration_ms,
+        executed_at: Utc::now(),
+        suggestion_source: None, // Will be determined by correlation analysis
+        session_id: Some(hook_input.session_id.clone()),
+    };
+    
+    // Analyze execution and update tracking data
+    if let Err(e) = analyze_and_update_execution(&mut config, execution) {
+        eprintln!("Warning: Failed to analyze command execution: {e}");
+    }
+    
+    // Save updated configuration atomically
+    if let Err(e) = save_config_atomic(config_path, &config) {
+        eprintln!("Warning: Failed to save execution tracking data: {e}");
+    }
+    
+    // Always allow execution to complete normally (PostToolUse is observational)
+    Ok(())
+}
+
+/// Analyzes command execution and updates tracking data for learning validation.
+/// 
+/// Determines if the executed command was suggested by the system, correlates it with
+/// previous suggestions, updates effectiveness statistics, and adjusts confidence scores.
+/// 
+/// # Arguments
+/// * `config` - Configuration to update (modified in place)
+/// * `execution` - Command execution record to analyze
+/// 
+/// # Returns
+/// * `Ok(())` - Analysis completed successfully
+/// * `Err` - If analysis or updates fail
+fn analyze_and_update_execution(config: &mut Config, mut execution: CommandExecution) -> Result<()> {
+    // Initialize execution history if not present
+    if config.execution_history.is_none() {
+        config.execution_history = Some(ExecutionHistory {
+            command_executions: Some(Vec::new()),
+            suggestion_stats: Some(HashMap::new()),
+            mapping_correlations: Some(HashMap::new()),
+            user_overrides: Some(Vec::new()),
+        });
+    }
+    
+    // Determine if this command was suggested by analyzing it against known mappings
+    // (do this before borrowing config mutably)
+    let suggestion_info = determine_suggestion_correlation(config, &execution.command)?;
+    let suggestion_info_clone = suggestion_info.clone();
+    
+    let history = config.execution_history.as_mut().unwrap();
+    
+    // Update execution record with suggestion information
+    if let Some((original_cmd, source, replacement)) = suggestion_info {
+        execution.was_suggested = true;
+        execution.original_command = Some(original_cmd.clone());
+        execution.suggestion_source = Some(source.clone());
+        
+        // Update suggestion statistics
+        update_suggestion_stats(history, &original_cmd, &replacement, execution.success);
+        
+        // Update mapping correlations
+        update_mapping_correlation(history, &original_cmd, &replacement, execution.success);
+        
+        // Log the correlation for debugging
+        let status = if execution.success { "✅" } else { "❌" };
+        eprintln!(
+            "{} Command correlation: {} → {} (source: {}, exit_code: {:?})",
+            status,
+            original_cmd,
+            replacement,
+            source,
+            execution.exit_code
+        );
+    } else {
+        // Check for potential user overrides by comparing against recent suggestions
+        detect_user_override(history, &execution);
+    }
+    
+    // Add execution to history
+    if let Some(ref mut executions) = history.command_executions {
+        executions.push(execution.clone());
+        
+        // Keep only recent executions to prevent unbounded growth
+        const MAX_EXECUTION_HISTORY: usize = 1000;
+        if executions.len() > MAX_EXECUTION_HISTORY {
+            executions.drain(0..executions.len() - MAX_EXECUTION_HISTORY);
+        }
+    }
+    
+    // Adjust confidence based on execution results (separate from history operations)
+    if let Some((original_cmd, source, replacement)) = suggestion_info_clone {
+        if let Err(e) = adjust_mapping_confidence(config, &original_cmd, &replacement, &source, execution.success) {
+            eprintln!("Warning: Failed to adjust mapping confidence: {e}");
+        }
+    }
+    
+    // Perform periodic maintenance (confidence decay, never_suggest evaluation)
+    // Only run this occasionally to avoid performance impact
+    if should_run_maintenance(config) {
+        if let Err(e) = perform_periodic_maintenance(config) {
+            eprintln!("Warning: Failed to perform periodic maintenance: {e}");
+        }
+    }
+    
+    Ok(())
+}
+
+/// Determines if periodic maintenance should be run based on time and activity.
+/// 
+/// Runs maintenance at most once per day and only after significant activity.
+fn should_run_maintenance(config: &Config) -> bool {
+    const MAINTENANCE_INTERVAL_DAYS: i64 = 1;
+    const MIN_EXECUTIONS_FOR_MAINTENANCE: usize = 10;
+    
+    // Check if enough time has passed since last maintenance
+    let last_updated = config.learning_meta
+        .as_ref()
+        .map(|meta| meta.last_updated)
+        .unwrap_or_else(Utc::now);
+    
+    let days_since_maintenance = (Utc::now() - last_updated).num_days();
+    if days_since_maintenance < MAINTENANCE_INTERVAL_DAYS {
+        return false;
+    }
+    
+    // Check if there's been enough activity to warrant maintenance
+    let execution_count = config.execution_history
+        .as_ref()
+        .and_then(|history| history.command_executions.as_ref())
+        .map(|executions| executions.len())
+        .unwrap_or(0);
+    
+    execution_count >= MIN_EXECUTIONS_FOR_MAINTENANCE
+}
+
+/// Determines if a command matches any known suggestion patterns.
+/// 
+/// Returns the original command, source, and replacement if a correlation is found.
+fn determine_suggestion_correlation(
+    config: &Config,
+    executed_command: &str,
+) -> Result<Option<(String, String, String)>> {
+    // Check against all learned mappings to see if this execution matches a suggestion
+    if let Some(learned) = &config.learned {
+        // Check project mappings first (highest priority)
+        if let Some(project_mappings) = &learned.project {
+            if let Some(correlation) = find_command_correlation(project_mappings, executed_command)? {
+                return Ok(Some((correlation.0, "project_learned".to_string(), correlation.1)));
+            }
+        }
+        
+        // Check global mappings
+        if let Some(global_mappings) = &learned.global {
+            if let Some(correlation) = find_command_correlation(global_mappings, executed_command)? {
+                return Ok(Some((correlation.0, "global_learned".to_string(), correlation.1)));
+            }
+        }
+        
+        // Check context mappings
+        if let Some(context_mappings) = &learned.context {
+            for (context_name, mappings) in context_mappings {
+                if let Some(correlation) = find_command_correlation(mappings, executed_command)? {
+                    return Ok(Some((correlation.0, format!("context_{context_name}"), correlation.1)));
+                }
+            }
+        }
+    }
+    
+    // Check against static mappings
+    if let Some(correlation) = find_command_correlation_static(&config.commands, executed_command)? {
+        return Ok(Some((correlation.0, "static".to_string(), correlation.1)));
+    }
+    
+    Ok(None)
+}
+
+/// Finds correlation between executed command and learned mappings.
+fn find_command_correlation(
+    mappings: &HashMap<String, LearnedMapping>,
+    executed_command: &str,
+) -> Result<Option<(String, String)>> {
+    for (original_pattern, learned_mapping) in mappings {
+        // Check if the executed command could be the result of applying this mapping
+        let _regex_pattern = format!(r"\b{}\b", regex::escape(original_pattern));
+        
+        // If the executed command contains the replacement, it might be a suggestion result
+        if executed_command.contains(&learned_mapping.replacement) {
+            // Verify by checking if applying the mapping to some original would produce this result
+            if let Some(reconstructed_original) = reconstruct_original_command(
+                executed_command,
+                original_pattern,
+                &learned_mapping.replacement,
+            ) {
+                return Ok(Some((reconstructed_original, learned_mapping.replacement.clone())));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Finds correlation between executed command and static mappings.
+fn find_command_correlation_static(
+    commands: &HashMap<String, String>,
+    executed_command: &str,
+) -> Result<Option<(String, String)>> {
+    for (original_pattern, replacement) in commands {
+        if executed_command.contains(replacement) {
+            if let Some(reconstructed_original) = reconstruct_original_command(
+                executed_command,
+                original_pattern,
+                replacement,
+            ) {
+                return Ok(Some((reconstructed_original, replacement.clone())));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Attempts to reconstruct the original command that would produce the executed command.
+fn reconstruct_original_command(
+    executed_command: &str,
+    original_pattern: &str,
+    replacement: &str,
+) -> Option<String> {
+    // Simple reconstruction: replace the replacement back with the original pattern
+    if executed_command.contains(replacement) {
+        Some(executed_command.replace(replacement, original_pattern))
+    } else {
+        None
+    }
+}
+
+/// Updates suggestion statistics for a command mapping.
+fn update_suggestion_stats(
+    history: &mut ExecutionHistory,
+    original_command: &str,
+    replacement_command: &str,
+    success: bool,
+) {
+    let stats_key = format!("{original_command}→{replacement_command}");
+    
+    if history.suggestion_stats.is_none() {
+        history.suggestion_stats = Some(HashMap::new());
+    }
+    
+    let stats_map = history.suggestion_stats.as_mut().unwrap();
+    let stats = stats_map.entry(stats_key).or_insert_with(|| SuggestionStats {
+        times_suggested: 0,
+        times_accepted: 1, // This execution represents an acceptance
+        times_successful: if success { 1 } else { 0 },
+        times_rejected: 0,
+        effectiveness_score: if success { 1.0 } else { 0.0 },
+        last_updated: Utc::now(),
+    });
+    
+    stats.times_accepted += 1;
+    if success {
+        stats.times_successful += 1;
+    }
+    
+    // Recalculate effectiveness score
+    stats.effectiveness_score = if stats.times_accepted > 0 {
+        stats.times_successful as f32 / stats.times_accepted as f32
+    } else {
+        0.0
+    };
+    
+    stats.last_updated = Utc::now();
+}
+
+/// Updates mapping correlation data for learning validation.
+fn update_mapping_correlation(
+    history: &mut ExecutionHistory,
+    original_pattern: &str,
+    replacement_command: &str,
+    success: bool,
+) {
+    if history.mapping_correlations.is_none() {
+        history.mapping_correlations = Some(HashMap::new());
+    }
+    
+    let correlations = history.mapping_correlations.as_mut().unwrap();
+    let correlation = correlations.entry(original_pattern.to_string()).or_insert_with(|| {
+        MappingCorrelation {
+            original_pattern: original_pattern.to_string(),
+            replacement_command: replacement_command.to_string(),
+            success_rate: if success { 1.0 } else { 0.0 },
+            total_executions: 1,
+            successful_executions: if success { 1 } else { 0 },
+            confidence_adjustment: 0.0,
+            last_calculated: Utc::now(),
+        }
+    });
+    
+    correlation.total_executions += 1;
+    if success {
+        correlation.successful_executions += 1;
+    }
+    
+    // Recalculate success rate and confidence adjustment
+    correlation.success_rate = correlation.successful_executions as f32 / correlation.total_executions as f32;
+    
+    // Calculate confidence adjustment based on success rate and sample size
+    let sample_weight = (correlation.total_executions as f32 / 10.0).min(1.0);
+    correlation.confidence_adjustment = (correlation.success_rate - 0.7) * sample_weight * 0.1;
+    
+    correlation.last_calculated = Utc::now();
+}
+
+/// Adjusts mapping confidence based on execution results.
+fn adjust_mapping_confidence(
+    config: &mut Config,
+    original_command: &str,
+    replacement_command: &str,
+    source: &str,
+    success: bool,
+) -> Result<()> {
+    // Determine confidence adjustment based on success/failure
+    let adjustment = if success { 0.05 } else { -0.10 }; // Success increases, failure decreases
+    
+    // Apply adjustment to the appropriate mapping
+    match source {
+        "global_learned" => {
+            if let Some(ref mut learned) = config.learned {
+                if let Some(ref mut global) = learned.global {
+                    if let Some(mapping) = global.get_mut(original_command) {
+                        mapping.confidence = (mapping.confidence + adjustment).clamp(0.0, 1.0);
+                        eprintln!(
+                            "📊 Confidence adjusted: {} → {} = {:.1}% ({})",
+                            original_command,
+                            replacement_command,
+                            mapping.confidence * 100.0,
+                            if success { "success" } else { "failure" }
+                        );
+                    }
+                }
+            }
+        }
+        "project_learned" => {
+            if let Some(ref mut learned) = config.learned {
+                if let Some(ref mut project) = learned.project {
+                    if let Some(mapping) = project.get_mut(original_command) {
+                        mapping.confidence = (mapping.confidence + adjustment).clamp(0.0, 1.0);
+                        eprintln!(
+                            "📊 Project confidence adjusted: {} → {} = {:.1}% ({})",
+                            original_command,
+                            replacement_command,
+                            mapping.confidence * 100.0,
+                            if success { "success" } else { "failure" }
+                        );
+                    }
+                }
+            }
+        }
+        source if source.starts_with("context_") => {
+            let context_name = source.strip_prefix("context_").unwrap_or(source);
+            if let Some(ref mut learned) = config.learned {
+                if let Some(ref mut context) = learned.context {
+                    if let Some(mappings) = context.get_mut(context_name) {
+                        if let Some(mapping) = mappings.get_mut(original_command) {
+                            mapping.confidence = (mapping.confidence + adjustment).clamp(0.0, 1.0);
+                            eprintln!(
+                                "📊 Context confidence adjusted: {} → {} = {:.1}% (context: {}, {})",
+                                original_command,
+                                replacement_command,
+                                mapping.confidence * 100.0,
+                                context_name,
+                                if success { "success" } else { "failure" }
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        _ => {
+            // Static mappings don't have adjustable confidence
+            eprintln!(
+                "📊 Static mapping executed: {} → {} ({})",
+                original_command,
+                replacement_command,
+                if success { "success" } else { "failure" }
+            );
+        }
+    }
+    
+    Ok(())
+}
+
+/// Detects potential user overrides by analyzing execution patterns.
+fn detect_user_override(_history: &mut ExecutionHistory, execution: &CommandExecution) {
+    // For now, just log unmatched executions for future analysis
+    // In a more sophisticated implementation, we could compare against recent suggestions
+    eprintln!(
+        "🔍 Unmatched execution: {} (exit_code: {:?})",
+        execution.command,
+        execution.exit_code
+    );
+    
+    // TODO: Implement sophisticated override detection by comparing against
+    // recent PreToolUse suggestions that were blocked or rejected
+}
+
+/// Applies time-based confidence decay to prevent stale mappings from persisting.
+/// 
+/// Reduces confidence scores for mappings that haven't been used recently,
+/// ensuring the system adapts to changing user preferences over time.
+fn apply_confidence_decay(config: &mut Config) -> Result<()> {
+    const DECAY_RATE: f32 = 0.02; // 2% decay per week
+    const WEEKS_PER_DAY: f32 = 1.0 / 7.0;
+    
+    let now = Utc::now();
+    
+    if let Some(ref mut learned) = config.learned {
+        // Apply decay to global mappings
+        if let Some(ref mut global) = learned.global {
+            for mapping in global.values_mut() {
+                let days_since_learned = (now - mapping.learned_at).num_days() as f32;
+                let decay_factor = (DECAY_RATE * days_since_learned * WEEKS_PER_DAY).min(0.3); // Max 30% decay
+                mapping.confidence = (mapping.confidence - decay_factor).max(0.1); // Min 10% confidence
+            }
+        }
+        
+        // Apply decay to project mappings
+        if let Some(ref mut project) = learned.project {
+            for mapping in project.values_mut() {
+                let days_since_learned = (now - mapping.learned_at).num_days() as f32;
+                let decay_factor = (DECAY_RATE * days_since_learned * WEEKS_PER_DAY).min(0.3);
+                mapping.confidence = (mapping.confidence - decay_factor).max(0.1);
+            }
+        }
+        
+        // Apply decay to context mappings
+        if let Some(ref mut context) = learned.context {
+            for mappings in context.values_mut() {
+                for mapping in mappings.values_mut() {
+                    let days_since_learned = (now - mapping.learned_at).num_days() as f32;
+                    let decay_factor = (DECAY_RATE * days_since_learned * WEEKS_PER_DAY).min(0.3);
+                    mapping.confidence = (mapping.confidence - decay_factor).max(0.1);
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Evaluates mapping effectiveness and moves low-performing suggestions to never_suggest.
+/// 
+/// Analyzes suggestion statistics to identify consistently failing mappings and
+/// automatically adds them to the never_suggest list to prevent future suggestions.
+fn evaluate_and_update_never_suggest(config: &mut Config) -> Result<()> {
+    const MIN_ATTEMPTS: u32 = 5; // Minimum attempts before considering never_suggest
+    const FAILURE_THRESHOLD: f32 = 0.3; // Below 30% success rate triggers never_suggest
+    
+    if let Some(ref history) = config.execution_history {
+        if let Some(ref stats) = history.suggestion_stats {
+            let mut never_suggest_candidates = Vec::new();
+            
+            for (mapping_key, suggestion_stats) in stats {
+                // Only consider mappings with enough attempts
+                if suggestion_stats.times_accepted >= MIN_ATTEMPTS {
+                    // Check if effectiveness is below threshold
+                    if suggestion_stats.effectiveness_score < FAILURE_THRESHOLD {
+                        // Parse the mapping key (format: "original→replacement")
+                        if let Some((original, replacement)) = mapping_key.split_once('→') {
+                            never_suggest_candidates.push((original.to_string(), replacement.to_string()));
+                            
+                            eprintln!(
+                                "🚫 Moving to never-suggest: {} → {} (effectiveness: {:.1}%, attempts: {})",
+                                original,
+                                replacement,
+                                suggestion_stats.effectiveness_score * 100.0,
+                                suggestion_stats.times_accepted
+                            );
+                        }
+                    }
+                }
+            }
+            
+            // Add candidates to never_suggest
+            if !never_suggest_candidates.is_empty() {
+                if config.never_suggest.is_none() {
+                    config.never_suggest = Some(HashMap::new());
+                }
+                
+                // First, add to never_suggest
+                {
+                    let never_suggest = config.never_suggest.as_mut().unwrap();
+                    for (original, replacement) in &never_suggest_candidates {
+                        never_suggest.insert(original.clone(), replacement.clone());
+                    }
+                }
+                
+                // Then remove from learned mappings to prevent conflicts
+                for (original, _) in never_suggest_candidates {
+                    remove_from_learned_mappings(config, &original);
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Removes a mapping from all learned mapping categories.
+/// 
+/// Used when a mapping is moved to never_suggest to prevent conflicts.
+fn remove_from_learned_mappings(config: &mut Config, original_command: &str) {
+    if let Some(ref mut learned) = config.learned {
+        // Remove from global mappings
+        if let Some(ref mut global) = learned.global {
+            global.remove(original_command);
+        }
+        
+        // Remove from project mappings
+        if let Some(ref mut project) = learned.project {
+            project.remove(original_command);
+        }
+        
+        // Remove from context mappings
+        if let Some(ref mut context) = learned.context {
+            for mappings in context.values_mut() {
+                mappings.remove(original_command);
+            }
+        }
+    }
+}
+
+/// Performs periodic maintenance on the configuration data.
+/// 
+/// Applies confidence decay, evaluates never_suggest candidates, and cleans up
+/// old data to keep the system performant and accurate.
+fn perform_periodic_maintenance(config: &mut Config) -> Result<()> {
+    // Apply time-based confidence decay
+    apply_confidence_decay(config)?;
+    
+    // Evaluate and update never_suggest based on performance
+    evaluate_and_update_never_suggest(config)?;
+    
+    // Update learning metadata
+    if let Some(ref mut meta) = config.learning_meta {
+        meta.last_updated = Utc::now();
+    }
+    
     Ok(())
 }
 
@@ -825,10 +2178,11 @@ fn create_empty_config() -> Config {
             total_mappings_learned: 0,
             session_mappings: 0,
             user_corrections: 0,
-            version: "0.2.0".to_string(),
+            version: "0.3.0".to_string(),
         }),
         confidence_scores: None,
         never_suggest: None,
+        execution_history: None,
     }
 }
 
@@ -849,10 +2203,16 @@ fn migrate_legacy_config(legacy_commands: HashMap<String, String>) -> Config {
             total_mappings_learned: 0,
             session_mappings: 0,
             user_corrections: 0,
-            version: "0.2.0".to_string(),
+            version: "0.3.0".to_string(),
         }),
         confidence_scores: Some(HashMap::new()),
         never_suggest: Some(HashMap::new()),
+        execution_history: Some(ExecutionHistory {
+            command_executions: Some(Vec::new()),
+            suggestion_stats: Some(HashMap::new()),
+            mapping_correlations: Some(HashMap::new()),
+            user_overrides: Some(Vec::new()),
+        }),
     }
 }
 
@@ -887,11 +2247,20 @@ fn validate_and_migrate_config(mut config: Config, _config_path: &str) -> Result
     if config.never_suggest.is_none() {
         config.never_suggest = Some(HashMap::new());
     }
+    
+    if config.execution_history.is_none() {
+        config.execution_history = Some(ExecutionHistory {
+            command_executions: Some(Vec::new()),
+            suggestion_stats: Some(HashMap::new()),
+            mapping_correlations: Some(HashMap::new()),
+            user_overrides: Some(Vec::new()),
+        });
+    }
 
     // Update version if it's outdated (future migration logic can go here)
     if let Some(ref mut meta) = config.learning_meta {
-        if meta.version != "0.2.0" {
-            meta.version = "0.2.0".to_string();
+        if meta.version != "0.3.0" {
+            meta.version = "0.3.0".to_string();
             meta.last_updated = Utc::now();
         }
     }
@@ -1009,7 +2378,7 @@ fn check_pattern_matches(
             // Generate suggested replacement
             let suggested_command = regex.replace_all(command, replacement);
             let reason = format!(
-                "Command '{pattern}' is mapped to use '{replacement}' instead. Try: {suggested_command}"
+                "Tool preference: Use '{replacement}' instead of '{pattern}' for this project. Running: {suggested_command}"
             );
             return Ok(Some(PatternMatch {
                 suggested_command: suggested_command.to_string(),
@@ -1198,10 +2567,11 @@ fn generate_config_for_project(project_type: &str) -> String {
             total_mappings_learned: 0,
             session_mappings: 0,
             user_corrections: 0,
-            version: "0.2.0".to_string(),
+            version: "0.3.0".to_string(),
         }),
         confidence_scores: None,
         never_suggest: None,
+        execution_history: None,
     };
     
     let header = format!(
@@ -1327,6 +2697,18 @@ Option 1: Using the /hooks command in Claude Code
           }}
         ]
       }}
+    ],
+    "PostToolUse": [
+      {{
+        "matcher": "Bash",
+        "hooks": [
+          {{
+            "type": "command",
+            "command": "{} --hook",
+            "timeout": 15
+          }}
+        ]
+      }}
     ]
   }}
 }}"#;
@@ -1334,21 +2716,29 @@ Option 1: Using the /hooks command in Claude Code
     print!(
         r#"{HEADER}
   4. Add hook command: `{binary_path} --hook`
-  5. Also add `UserPromptSubmit` hook with the same command
+  5. Also add `UserPromptSubmit` and `PostToolUse` hooks with the same command
   6. Save to project settings
 
 Option 2: Manual .claude/settings.json configuration
-Add this to your .claude/settings.json (enables both command suggestions and learning):
+Add this to your .claude/settings.json (enables complete learning system):
 
 {json_config}
 
-Note: The dual-hook setup enables:
+Note: The triple-hook setup enables:
 - PreToolUse: Blocks/suggests commands based on learned preferences
 - UserPromptSubmit: Learns new preferences from natural language like "use bun instead of npm"
+- PostToolUse: Validates suggestion effectiveness and adjusts confidence scores automatically
+
+Additional CLI Commands:
+- `{binary_path} --list-learned`: View all learned command mappings
+- `{binary_path} --confidence-report`: Generate detailed effectiveness analysis
+- `{binary_path} --reset-learning`: Clear all learned data (keeps static config)
+- `{binary_path} --export-config file.toml`: Export learned preferences
+- `{binary_path} --import-config file.toml`: Import learned preferences
 
 "#,
         binary_path = binary_path,
-        json_config = JSON_TEMPLATE.replace("{}", &binary_path).replace("{}", &binary_path)
+        json_config = JSON_TEMPLATE.replacen("{}", &binary_path, 3)
     );
 
     Ok(())
@@ -1371,6 +2761,7 @@ mod tests {
             learning_meta: None,
             confidence_scores: None,
             never_suggest: None,
+            execution_history: None,
         };
 
         // Test npm mapping
@@ -1458,10 +2849,11 @@ yarn = "bun"
                 total_mappings_learned: 2,
                 session_mappings: 0,
                 user_corrections: 0,
-                version: "0.2.0".to_string(),
+                version: "0.3.0".to_string(),
             }),
             confidence_scores: Some(HashMap::new()),
             never_suggest: Some(HashMap::new()),
+            execution_history: None,
         };
 
         // Test priority resolution: project should override static
@@ -1513,6 +2905,7 @@ yarn = "bun"
             learning_meta: None,
             confidence_scores: None,
             never_suggest: None,
+            execution_history: None,
         };
 
         // High confidence should be suggested
@@ -1538,6 +2931,7 @@ yarn = "bun"
             learning_meta: None,
             confidence_scores: None,
             never_suggest: Some(never_suggest),
+            execution_history: None,
         };
 
         // never_suggest should block the command (return None in legacy wrapper)
