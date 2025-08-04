@@ -41,6 +41,18 @@ pub fn run_cli() -> Result<()> {
                 .help("Install and configure Claude Hook Advisor for this project")
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("install-hooks")
+                .long("install-hooks")
+                .help("Install hooks configuration directly into Claude Code settings with backup")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("uninstall-hooks")
+                .long("uninstall-hooks")
+                .help("Remove Claude Hook Advisor hooks from Claude Code settings with backup")
+                .action(clap::ArgAction::SetTrue),
+        )
         .get_matches();
 
     let config_path = matches.get_one::<String>("config").unwrap();
@@ -50,10 +62,16 @@ pub fn run_cli() -> Result<()> {
         run_as_hook(config_path, replace_mode)
     } else if matches.get_flag("install") {
         run_installer(config_path)
+    } else if matches.get_flag("install-hooks") {
+        crate::installer::install_claude_hooks()
+    } else if matches.get_flag("uninstall-hooks") {
+        crate::installer::uninstall_claude_hooks()
     } else {
         println!("Claude Hook Advisor");
         println!("Use --hook flag to run as a Claude Code hook");
         println!("Use --install flag to set up configuration for this project");
+        println!("Use --install-hooks flag to install hooks directly into Claude Code settings");
+        println!("Use --uninstall-hooks flag to remove hooks from Claude Code settings");
         Ok(())
     }
 }
