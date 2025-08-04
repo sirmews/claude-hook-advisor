@@ -309,12 +309,12 @@ fn get_current_binary_path() -> Result<String> {
     }
     
     // For production builds, prefer simple binary name if available in PATH
+    // Otherwise, fall back to absolute path of current executable
     if which::which(binary_name).is_ok() {
-        return Ok(binary_name.to_string());
+        Ok(binary_name.to_string())
+    } else {
+        Ok(current_exe.to_string_lossy().to_string())
     }
-
-    // Fall back to absolute path of current executable
-    Ok(current_exe.to_string_lossy().to_string())
 }
 
 /// Merges Claude Hook Advisor hooks into existing settings, preserving other hooks.
