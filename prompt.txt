@@ -1,0 +1,181 @@
+# Claude Hook Advisor Module Refactoring Session
+
+## Context
+We are implementing the module organization plan for claude-hook-advisor to follow Rust LLM-friendly best practices. The project currently has a monolithic 671-line main.rs that needs to be split into focused modules.
+
+## Current State
+- **Location**: `/Users/nav/Projects/crates/claude-hook-advisor`
+- **Branch**: `main` (comprehensive testing suite merged)
+- **Current File**: `src/main.rs` (671 lines)
+- **Test Coverage**: 14 tests passing (9 unit + 5 integration)
+- **Version**: 0.1.0 (no version bump needed)
+
+## Pre-Session Verification
+Run these commands to verify current state:
+```bash
+cd /Users/nav/Projects/crates/claude-hook-advisor
+git status                                      # Should be clean on main
+cargo test                                      # Should show 14 tests passing
+cargo clippy --all-targets --all-features -- -D warnings  # Should be clean
+make run-example                                # Should work (npm -> bun suggestion)
+```
+
+## Documentation References
+1. **Module Organization Plan**: `/Users/nav/Documents/Documentation/claude-hook-advisor/module-organization-plan.md`
+2. **Rust Best Practices**: `/Users/nav/Documents/Documentation/rust/llm-friendly-practices.md`
+3. **Project Status**: `/Users/nav/Documents/Documentation/claude-hook-advisor/v0.2.0-accurate-status.md`
+
+## Implementation Steps
+
+### Step 1: Create Feature Branch
+```bash
+git checkout -b module-organization
+git status  # Verify clean working tree
+```
+
+### Step 2: Phase 1 - Create Module Structure
+1. Create `src/lib.rs` with module declarations:
+   ```rust
+   //! Claude Hook Advisor
+   //! 
+   //! A Rust CLI tool that integrates with Claude Code as a PreToolUse hook
+   
+   pub mod types;
+   pub mod config;
+   pub mod hooks;
+   pub mod installer;
+   pub mod patterns;
+   pub mod cli;
+   
+   // Re-exports for clean public API
+   pub use config::Config;
+   pub use hooks::{HookInput, HookOutput, ToolInput};
+   pub use cli::run_cli;
+   ```
+
+2. Create empty module files:
+   ```bash
+   touch src/types.rs src/config.rs src/hooks.rs src/installer.rs src/patterns.rs src/cli.rs
+   ```
+
+3. Add basic structure to each module file (empty functions with correct signatures)
+
+4. Test compilation: `cargo check`
+
+### Step 3: Phase 2 - Extract Core Logic
+**Priority Order**: types → config → hooks → patterns
+
+1. **Extract types.rs** (~80 lines):
+   - Move `Config`, `HookInput`, `HookOutput`, `ToolInput` structs
+   - Include all serde derives and documentation
+   - Test: `cargo check`
+
+2. **Extract config.rs** (~120 lines):
+   - Move `load_config()` function
+   - Include TOML parsing and error handling
+   - Move related test: `test_config_loading_missing_file`
+   - Test: `cargo test`
+
+3. **Extract hooks.rs** (~150 lines):
+   - Move `run_as_hook()` and `check_command_mappings()` functions  
+   - Move related tests: `test_command_mapping*`, `test_hook_output_serialization`
+   - Test: `cargo test`
+
+4. **Extract patterns.rs** (~120 lines):
+   - Move `generate_config_for_project()` and `get_commands_for_project_type()`
+   - Move related tests: `test_generate_config_for_project`, `test_get_commands_for_project_type`
+   - Test: `cargo test`
+
+**After Each Module**: Run `cargo test` and verify all tests still pass
+
+### Step 4: Phase 3 - Extract Interface Modules
+
+1. **Extract installer.rs** (~200 lines):
+   - Move `run_installer()`, `detect_project_type()`, `print_claude_integration_instructions()`
+   - Move related test: `test_project_type_detection`
+   - Test: `cargo test`
+
+2. **Extract cli.rs** (~80 lines):
+   - Move `main()` function (rename to `run_cli()`)
+   - Move clap setup and argument parsing
+   - Move related tests: CLI help/version tests
+   - Test: `cargo test`
+
+3. **Create minimal main.rs** (~20 lines):
+   ```rust
+   //! Claude Hook Advisor binary entry point
+   use claude_hook_advisor::cli::run_cli;
+   
+   fn main() -> anyhow::Result<()> {
+       run_cli()
+   }
+   ```
+
+### Step 5: Phase 4 - Update Integration Tests
+1. Update `tests/integration_test.rs` imports:
+   ```rust
+   // Change from internal access to public API
+   use claude_hook_advisor::*;
+   ```
+2. Run integration tests: `cargo test --test integration_test`
+3. Fix any import issues
+
+### Step 6: Phase 5 - Final Verification
+1. **Run comprehensive test suite**:
+   ```bash
+   cargo test                                      # All 14 tests should pass
+   cargo clippy --all-targets --all-features -- -D warnings
+   cargo check
+   make run-example                                # Functional test
+   ```
+
+2. **Verify module sizes**:
+   ```bash
+   wc -l src/*.rs                                  # Each should be < 200 lines
+   ```
+
+3. **Generate documentation**:
+   ```bash
+   cargo doc --open                                # Verify docs generate correctly
+   ```
+
+## Success Criteria Checklist
+- [ ] All 14 tests pass (9 unit + 5 integration)
+- [ ] Each module < 200 lines
+- [ ] Clippy clean with `--all-targets --all-features -- -D warnings`
+- [ ] Hook functionality works: `make run-example`
+- [ ] CLI interface unchanged: `cargo run -- --help`
+- [ ] No circular dependencies
+- [ ] Documentation generates without errors
+
+## Commit Strategy
+Create commits after each major milestone:
+1. "Create module structure and empty implementations"
+2. "Extract types and config modules with tests"  
+3. "Extract hooks and patterns modules with tests"
+4. "Extract installer and CLI modules with tests"
+5. "Update integration tests and finalize refactoring"
+
+## Expected Outcome
+- `src/main.rs`: ~20 lines (minimal entry point)
+- 7 focused modules with clear responsibilities
+- All tests passing with unchanged functionality
+- Clean, LLM-friendly module organization
+- Ready for new feature development
+
+## Troubleshooting Common Issues
+1. **Import errors**: Check module declarations in `lib.rs`
+2. **Test failures**: Verify test moved to correct module with proper imports
+3. **Circular dependencies**: Review module dependencies, may need to move shared types
+4. **Missing re-exports**: Update `lib.rs` public API exports
+
+## Time Estimate
+2-3 hours for careful, test-verified refactoring with proper documentation.
+
+---
+
+**References**: 
+- Module Plan: `/Users/nav/Documents/Documentation/claude-hook-advisor/module-organization-plan.md`
+- Best Practices: `/Users/nav/Documents/Documentation/rust/llm-friendly-practices.md`
+
+**Last Updated**: 2025-08-03
