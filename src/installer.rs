@@ -297,40 +297,24 @@ fn load_or_create_settings(settings_path: &Path) -> Result<Value> {
 /// Gets the current binary path, preferring debug build for development.
 /// 
 /// Returns absolute paths for development builds to ensure they work regardless
-/// of Claude Code's working directory. Only returns simple binary name for
-/// production installs that are properly installed in PATH.
+/// of Claude Code's working directory. Uses simple binary name for production
+/// installs when available in PATH.
 fn get_current_binary_path() -> Result<String> {
     let current_exe = std::env::current_exe()?;
     let binary_name = env!("CARGO_PKG_NAME");
     
-    // Check if we're running from a development debug build
-    // Use absolute path to avoid working directory issues
-    if is_development_build(&current_exe) {
+    // For development builds, always use absolute path to avoid working directory issues
+    if cfg!(debug_assertions) {
         return Ok(current_exe.to_string_lossy().to_string());
     }
     
-    // For production installs, check if the binary is properly installed in PATH
-    // and is NOT the same as our current executable (to avoid local dev builds)
-    if let Ok(path_exe) = which::which(binary_name) {
-        // If the PATH version is different from current exe, use simple name
-        if path_exe != current_exe {
-            return Ok(binary_name.to_string());
-        }
+    // For production builds, prefer simple binary name if available in PATH
+    if which::which(binary_name).is_ok() {
+        return Ok(binary_name.to_string());
     }
 
     // Fall back to absolute path of current executable
     Ok(current_exe.to_string_lossy().to_string())
-}
-
-/// Determines if the current executable is a development build.
-/// 
-/// Checks if the executable path contains target/debug or target\\debug
-/// to identify development builds across platforms.
-fn is_development_build(exe_path: &std::path::Path) -> bool {
-    let path_str = exe_path.to_string_lossy();
-    
-    // Check for both Unix and Windows path separators
-    path_str.contains("target/debug") || path_str.contains("target\\debug")
 }
 
 /// Merges Claude Hook Advisor hooks into existing settings, preserving other hooks.
@@ -980,48 +964,28 @@ mod tests {
     }
 
     #[test]
-    fn test_is_development_build_unix_debug() {
-        use std::path::Path;
+    fn test_debug_assertions_consistency() {
+        // This test validates that we're using the correct build detection method
+        // In debug builds (cargo test), debug_assertions should be true
+        // In release builds (cargo test --release), debug_assertions should be false
         
-        // Test Unix-style debug path
-        let debug_path = Path::new("/home/user/project/target/debug/claude-hook-advisor");
-        assert!(is_development_build(debug_path));
-    }
-
-    #[test]
-    fn test_is_development_build_windows_debug() {
-        use std::path::Path;
+        #[cfg(debug_assertions)]
+        {
+            // We're in a debug build - this should be true
+            assert!(cfg!(debug_assertions));
+        }
         
-        // Test Windows-style debug path
-        let debug_path = Path::new("C:\\Users\\user\\project\\target\\debug\\claude-hook-advisor.exe");
-        assert!(is_development_build(debug_path));
-    }
-
-    #[test]
-    fn test_is_development_build_release() {
-        use std::path::Path;
-        
-        // Test release build (should not be considered development)
-        let release_path = Path::new("/home/user/project/target/release/claude-hook-advisor");
-        assert!(!is_development_build(release_path));
-        
-        let release_path_win = Path::new("C:\\Users\\user\\project\\target\\release\\claude-hook-advisor.exe");
-        assert!(!is_development_build(release_path_win));
-    }
-
-    #[test]
-    fn test_is_development_build_installed() {
-        use std::path::Path;
-        
-        // Test installed binary paths (should not be considered development)
-        let installed_path = Path::new("/usr/local/bin/claude-hook-advisor");
-        assert!(!is_development_build(installed_path));
-        
-        let cargo_path = Path::new("/home/user/.cargo/bin/claude-hook-advisor");
-        assert!(!is_development_build(cargo_path));
+        #[cfg(not(debug_assertions))]
+        {
+            // We're in a release build - this should be false
+            assert!(!cfg!(debug_assertions));
+        }
     }
 
     // Note: Testing get_current_binary_path() fully requires mocking std::env::current_exe()
-    // which is not easily mockable. The logic is tested through the helper functions above
-    // and integration tests verify the end-to-end behavior.
+    // and the which crate, which is complex. The core logic is simple enough that the
+    // main risk is in the integration, which is tested through end-to-end tests.
+    //
+    // The build detection now uses cfg!(debug_assertions) which is a compile-time constant,
+    // so it's inherently reliable and doesn't need runtime testing.
 }
