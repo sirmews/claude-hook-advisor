@@ -295,19 +295,42 @@ fn load_or_create_settings(settings_path: &Path) -> Result<Value> {
 }
 
 /// Gets the current binary path, preferring debug build for development.
+/// 
+/// Returns absolute paths for development builds to ensure they work regardless
+/// of Claude Code's working directory. Only returns simple binary name for
+/// production installs that are properly installed in PATH.
 fn get_current_binary_path() -> Result<String> {
-    let current_dir = std::env::current_dir()?;
-    let debug_binary = current_dir.join("target/debug/claude-hook-advisor");
+    let current_exe = std::env::current_exe()?;
+    let binary_name = env!("CARGO_PKG_NAME");
     
-    // If we're in development, use the debug binary path
-    if debug_binary.exists() {
-        return Ok("./target/debug/claude-hook-advisor".to_string());
+    // Check if we're running from a development debug build
+    // Use absolute path to avoid working directory issues
+    if is_development_build(&current_exe) {
+        return Ok(current_exe.to_string_lossy().to_string());
+    }
+    
+    // For production installs, check if the binary is properly installed in PATH
+    // and is NOT the same as our current executable (to avoid local dev builds)
+    if let Ok(path_exe) = which::which(binary_name) {
+        // If the PATH version is different from current exe, use simple name
+        if path_exe != current_exe {
+            return Ok(binary_name.to_string());
+        }
     }
 
-    // Otherwise use the current executable
-    std::env::current_exe()
-        .map(|p| p.to_string_lossy().to_string())
-        .map_err(|e| anyhow!("Failed to determine binary path: {}", e))
+    // Fall back to absolute path of current executable
+    Ok(current_exe.to_string_lossy().to_string())
+}
+
+/// Determines if the current executable is a development build.
+/// 
+/// Checks if the executable path contains target/debug or target\\debug
+/// to identify development builds across platforms.
+fn is_development_build(exe_path: &std::path::Path) -> bool {
+    let path_str = exe_path.to_string_lossy();
+    
+    // Check for both Unix and Windows path separators
+    path_str.contains("target/debug") || path_str.contains("target\\debug")
 }
 
 /// Merges Claude Hook Advisor hooks into existing settings, preserving other hooks.
@@ -331,7 +354,7 @@ fn merge_claude_hooks(settings: &mut Value, binary_path: &str) -> Result<()> {
         .ok_or_else(|| anyhow!("hooks must be an object"))?;
 
     // Our hook configuration
-    let hook_command = format!("{} --hook", binary_path);
+    let hook_command = format!("{binary_path} --hook");
 
     // Install PreToolUse hook for Bash commands
     merge_hook_event(hooks, "PreToolUse", "Bash", &hook_command)?;
@@ -469,7 +492,7 @@ pub fn uninstall_claude_hooks() -> Result<()> {
     write_settings_file(&settings_path, &settings)?;
 
     println!("✅ Hooks successfully uninstalled!");
-    println!("🗑️  Removed {} claude-hook-advisor hook(s)", removed_count);
+    println!("🗑️  Removed {removed_count} claude-hook-advisor hook(s)");
     println!("🎯 Claude Hook Advisor is no longer active in Claude Code");
 
     Ok(())
@@ -955,4 +978,50 @@ mod tests {
         assert!(!settings.as_object().unwrap().contains_key("hooks"));
         assert!(settings.get("permissions").is_some());
     }
+
+    #[test]
+    fn test_is_development_build_unix_debug() {
+        use std::path::Path;
+        
+        // Test Unix-style debug path
+        let debug_path = Path::new("/home/user/project/target/debug/claude-hook-advisor");
+        assert!(is_development_build(debug_path));
+    }
+
+    #[test]
+    fn test_is_development_build_windows_debug() {
+        use std::path::Path;
+        
+        // Test Windows-style debug path
+        let debug_path = Path::new("C:\\Users\\user\\project\\target\\debug\\claude-hook-advisor.exe");
+        assert!(is_development_build(debug_path));
+    }
+
+    #[test]
+    fn test_is_development_build_release() {
+        use std::path::Path;
+        
+        // Test release build (should not be considered development)
+        let release_path = Path::new("/home/user/project/target/release/claude-hook-advisor");
+        assert!(!is_development_build(release_path));
+        
+        let release_path_win = Path::new("C:\\Users\\user\\project\\target\\release\\claude-hook-advisor.exe");
+        assert!(!is_development_build(release_path_win));
+    }
+
+    #[test]
+    fn test_is_development_build_installed() {
+        use std::path::Path;
+        
+        // Test installed binary paths (should not be considered development)
+        let installed_path = Path::new("/usr/local/bin/claude-hook-advisor");
+        assert!(!is_development_build(installed_path));
+        
+        let cargo_path = Path::new("/home/user/.cargo/bin/claude-hook-advisor");
+        assert!(!is_development_build(cargo_path));
+    }
+
+    // Note: Testing get_current_binary_path() fully requires mocking std::env::current_exe()
+    // which is not easily mockable. The logic is tested through the helper functions above
+    // and integration tests verify the end-to-end behavior.
 }
