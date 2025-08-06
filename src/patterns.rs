@@ -13,7 +13,11 @@ use std::collections::HashMap;
 /// * `String` - Complete TOML configuration content with header and mappings
 pub fn generate_config_for_project(project_type: &str) -> String {
     let commands = get_commands_for_project_type(project_type);
-    let config = Config { commands };
+    let config = Config { 
+        commands,
+        semantic_directories: HashMap::new(),
+        directory_variables: Default::default(),
+    };
     
     let header = format!(
         "# Claude Hook Advisor Configuration\n# Auto-generated for {project_type} project\n\n"

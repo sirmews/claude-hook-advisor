@@ -23,6 +23,8 @@ pub fn load_config(config_path: &str) -> Result<Config> {
         eprintln!("Warning: Config file '{config_path}' not found. No command mappings will be applied.");
         return Ok(Config {
             commands: HashMap::new(),
+            semantic_directories: HashMap::new(),
+            directory_variables: Default::default(),
         });
     }
 

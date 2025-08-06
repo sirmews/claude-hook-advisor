@@ -177,6 +177,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "once_cell",
  "regex",
  "serde",
  "serde_json",
