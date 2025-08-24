@@ -10,35 +10,43 @@ This guide covers how to integrate Claude Hook Advisor with Claude Code using th
 
 ## 🎯 Overview
 
-Claude Code's hook system allows you to intercept and modify tool calls before they execute. Claude Hook Advisor integrates as a PreToolUse hook that:
+Claude Code's hook system allows you to intercept and modify tool calls. Claude Hook Advisor integrates using a **triple-hook architecture**:
 
+### PreToolUse Hook
 - **Intercepts Bash commands** before execution
 - **Suggests better alternatives** based on your configuration
 - **Blocks problematic commands** and provides guidance
-- **Works transparently** with Claude's conversation flow
+
+### UserPromptSubmit Hook
+- **Analyzes user prompts** for semantic directory references
+- **Resolves directory aliases** to canonical paths
+- **Provides path information** to Claude Code automatically
+
+### PostToolUse Hook
+- **Tracks command execution** results and success rates
+- **Monitors performance** and usage patterns
+- **Provides analytics** for optimization
 
 ## 🔧 Integration Methods
 
-### Method 1: Using the `/hooks` Command (Recommended)
+### Method 1: Automatic Installation (Recommended)
 
-The easiest way to set up the integration:
+The easiest way to set up all three hooks:
 
-1. **Open Claude Code** in your project directory
-2. **Run the hooks command**:
-   ```
-   /hooks
-   ```
-3. **Select PreToolUse** from the hook types
-4. **Add matcher**: `Bash`
-5. **Add hook command**: 
-   ```
-   claude-hook-advisor --hook
-   ```
-   Or with full path:
-   ```
-   ~/.local/bin/claude-hook-advisor --hook
-   ```
-6. **Save to project settings**
+```bash
+claude-hook-advisor --install-hooks
+```
+
+This command will:
+- Create a timestamped backup of your existing Claude Code settings
+- Install PreToolUse, UserPromptSubmit, and PostToolUse hooks
+- Preserve any existing hooks while adding claude-hook-advisor ones
+- Use `.claude/settings.local.json` (preferred) or `.claude/settings.json`
+
+To remove the hooks later:
+```bash
+claude-hook-advisor --uninstall-hooks
+```
 
 ### Method 2: Manual Settings Configuration
 
@@ -47,20 +55,17 @@ For more control, manually edit your `.claude/settings.json`:
 ```json
 {
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude-hook-advisor --hook"
-          }
-        ]
-      }
-    ]
+    "PreToolUse": { "Bash": "claude-hook-advisor --hook" },
+    "UserPromptSubmit": { ".*": "claude-hook-advisor --hook" },
+    "PostToolUse": { "Bash": "claude-hook-advisor --hook" }
   }
 }
 ```
+
+**Hook Purposes:**
+- **PreToolUse**: Command mapping and blocking for Bash commands
+- **UserPromptSubmit**: Directory reference detection in all user prompts  
+- **PostToolUse**: Analytics and execution tracking for Bash commands
 
 ### Method 3: Global Configuration
 
@@ -223,17 +228,37 @@ Or for allowed commands:
 
 ### Manual Testing
 
-1. **Test hook directly**:
+1. **Test PreToolUse hook (command mapping)**:
    ```bash
    echo '{"session_id":"test","transcript_path":"","cwd":"","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm install"}}' | claude-hook-advisor --hook
    ```
 
-2. **Expected output**:
+   Expected output:
    ```json
    {
      "decision": "block",
      "reason": "Command 'npm' is mapped to use 'bun' instead. Try: bun install"
    }
+   ```
+
+2. **Test UserPromptSubmit hook (directory detection)**:
+   ```bash
+   echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check the docs directory for examples"}' | claude-hook-advisor --hook
+   ```
+
+   Expected output:
+   ```
+   Directory reference detected: 'docs' -> '/Users/you/Documents/Documentation'
+   ```
+
+3. **Test PostToolUse hook (analytics)**:
+   ```bash
+   echo '{"session_id":"test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"bun install"},"tool_response":{"exit_code":0}}' | claude-hook-advisor --hook
+   ```
+
+   Expected output:
+   ```
+   Command executed successfully: bun install (exit_code: 0)
    ```
 
 ### Integration Testing

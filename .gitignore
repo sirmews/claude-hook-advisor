@@ -34,3 +34,4 @@ Thumbs.db
 # Configs
 
 .claude-hook-advisor.toml
+.crush

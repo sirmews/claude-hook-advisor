@@ -181,6 +181,8 @@ claude-hook-advisor --help
 ```
 
 ### 4. Test Hook Functionality
+
+#### Test Command Mapping (PreToolUse)
 ```bash
 # Create a test configuration
 echo '[commands]
@@ -196,6 +198,24 @@ Expected output:
   "decision": "block",
   "reason": "Command 'npm' is mapped to use 'bun' instead. Try: bun install"
 }
+```
+
+#### Test Directory Aliasing
+```bash
+# Add a directory alias
+claude-hook-advisor --add-directory-alias "docs" "~/Documents/Documentation"
+
+# Test directory resolution
+claude-hook-advisor --resolve-directory "docs"
+
+# Test UserPromptSubmit hook
+echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check the docs directory"}' | claude-hook-advisor --hook
+```
+
+#### Install All Claude Code Hooks
+```bash
+# Automatically install all three hooks with backup
+claude-hook-advisor --install-hooks
 ```
 
 ## 🔄 Updating
@@ -286,13 +306,63 @@ sudo yum groupinstall "Development Tools"
 xcode-select --install
 ```
 
+## 📚 Available CLI Commands
+
+After installation, Claude Hook Advisor provides these commands:
+
+### Core Operations
+```bash
+# Run as hook (reads JSON from stdin)
+claude-hook-advisor --hook
+
+# Use custom configuration file
+claude-hook-advisor --config custom.toml --hook
+
+# Show version information
+claude-hook-advisor --version
+
+# Show help
+claude-hook-advisor --help
+```
+
+### Hook Management
+```bash
+# Install all hooks into Claude Code settings (with backup)
+claude-hook-advisor --install-hooks
+
+# Remove hooks from Claude Code settings (with backup)  
+claude-hook-advisor --uninstall-hooks
+
+# Legacy project installer (interactive)
+claude-hook-advisor --install
+```
+
+### Directory Aliasing
+```bash
+# Add semantic directory alias
+claude-hook-advisor --add-directory-alias "docs" "~/Documents/Documentation"
+
+# Add alias with variable substitution
+claude-hook-advisor --add-directory-alias "project_docs" "~/Documents/Documentation/{project}"
+
+# List all configured directory aliases
+claude-hook-advisor --list-directory-aliases
+
+# Resolve alias to canonical path
+claude-hook-advisor --resolve-directory "docs"
+
+# Remove directory alias
+claude-hook-advisor --remove-directory-alias "docs"
+```
+
 ## 🎯 Next Steps
 
 After successful installation:
 
-1. **[Create your first configuration](configuration.md)** - Set up project-specific command mappings
-2. **[Integrate with Claude Code](claude-integration.md)** - Configure the hook in Claude Code
-3. **[Explore examples](examples.md)** - See real-world configuration examples
+1. **[Set up directory aliases](directory-aliasing.md)** - Configure semantic directory references
+2. **[Create your first configuration](configuration.md)** - Set up project-specific command mappings
+3. **[Integrate with Claude Code](claude-integration.md)** - Configure the hook in Claude Code
+4. **[Explore examples](examples.md)** - See real-world configuration examples
 
 ---
 

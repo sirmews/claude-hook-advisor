@@ -176,3 +176,138 @@ fn test_cli_version() {
     // Should contain version information
     assert!(!stdout.trim().is_empty());
 }
+
+/// Test --setup command with fresh configuration
+#[test]
+fn test_setup_command_fresh_config() {
+    let temp_dir = tempdir().unwrap();
+    let config_path = temp_dir.path().join(".claude-hook-advisor.toml");
+    let config_path_str = config_path.to_str().unwrap();
+    
+    // Verify config doesn't exist initially
+    assert!(!config_path.exists());
+    
+    // Run --setup command  
+    let output = Command::new("cargo")
+        .args(["run", "--", "--setup", "--config", config_path_str])
+        .current_dir(env::current_dir().unwrap())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    
+    let result = output.wait_with_output().unwrap();
+    
+    // Check that command completed successfully
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    
+    // Should mention setup completion
+    assert!(stdout.contains("Running complete Claude Hook Advisor setup"));
+    assert!(stdout.contains("Setup complete"));
+    
+    // Should add all default aliases
+    assert!(stdout.contains("Added alias: 'docs'"));
+    assert!(stdout.contains("Added alias: 'central_docs'"));
+    assert!(stdout.contains("Added alias: 'project_docs'"));
+    assert!(stdout.contains("Added alias: 'claude_docs'"));
+    assert!(stdout.contains("Configuration saved with 4 new aliases"));
+    
+    // Verify config file was created and contains expected aliases
+    assert!(config_path.exists());
+    let config_content = fs::read_to_string(&config_path).unwrap();
+    assert!(config_content.contains("[semantic_directories]"));
+    assert!(config_content.contains("docs = \"~/Documents/Documentation\""));
+    assert!(config_content.contains("central_docs = \"~/Documents/Documentation\""));
+    assert!(config_content.contains("project_docs = \"~/Documents/Documentation/{project}\""));
+    assert!(config_content.contains("claude_docs = \"~/Documents/Documentation/claude\""));
+}
+
+/// Test --setup command with existing configuration (should not overwrite)
+#[test]
+fn test_setup_command_preserves_existing() {
+    let temp_dir = tempdir().unwrap();
+    let config_path = temp_dir.path().join(".claude-hook-advisor.toml");
+    let config_path_str = config_path.to_str().unwrap();
+    
+    // Create existing config with some aliases
+    let existing_config = r#"[commands]
+npm = "bun"
+yarn = "bun"
+
+[semantic_directories]
+docs = "~/CustomDocs"  # Different path to test preservation
+custom_alias = "/tmp/custom"
+
+[directory_variables]
+"#;
+    fs::write(&config_path, existing_config).unwrap();
+    
+    // Run --setup command
+    let output = Command::new("cargo")
+        .args(["run", "--", "--setup", "--config", config_path_str])
+        .current_dir(env::current_dir().unwrap())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    
+    let result = output.wait_with_output().unwrap();
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    
+    // Should only add missing aliases, not overwrite existing ones
+    assert!(!stdout.contains("Added alias: 'docs'")); // docs already exists
+    assert!(stdout.contains("Added alias: 'central_docs'"));
+    assert!(stdout.contains("Added alias: 'project_docs'"));
+    assert!(stdout.contains("Added alias: 'claude_docs'"));
+    assert!(stdout.contains("Configuration saved with 3 new aliases")); // Not 4!
+    
+    // Verify that existing values were preserved
+    let final_config = fs::read_to_string(&config_path).unwrap();
+    assert!(final_config.contains("docs = \"~/CustomDocs\"")); // Original value preserved
+    assert!(final_config.contains("custom_alias = \"/tmp/custom\"")); // Custom alias preserved
+    assert!(final_config.contains("npm = \"bun\"")); // Commands preserved
+    assert!(final_config.contains("central_docs = \"~/Documents/Documentation\"")); // New alias added
+}
+
+/// Test --setup command with all aliases already configured
+#[test]
+fn test_setup_command_all_aliases_exist() {
+    let temp_dir = tempdir().unwrap();
+    let config_path = temp_dir.path().join(".claude-hook-advisor.toml");
+    let config_path_str = config_path.to_str().unwrap();
+    
+    // Create config with all default aliases already present
+    let complete_config = r#"[commands]
+npm = "bun"
+
+[semantic_directories]
+docs = "~/Documents/Documentation"
+central_docs = "~/Documents/Documentation"
+project_docs = "~/Documents/Documentation/{project}"
+claude_docs = "~/Documents/Documentation/claude"
+
+[directory_variables]
+"#;
+    fs::write(&config_path, complete_config).unwrap();
+    
+    // Run --setup command
+    let output = Command::new("cargo")
+        .args(["run", "--", "--setup", "--config", config_path_str])
+        .current_dir(env::current_dir().unwrap())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    
+    let result = output.wait_with_output().unwrap();
+    let stdout = String::from_utf8(result.stdout).unwrap();
+    
+    // Should detect that all aliases already exist
+    assert!(stdout.contains("All default aliases already configured"));
+    assert!(!stdout.contains("Added alias:"));
+    assert!(!stdout.contains("Configuration saved"));
+    
+    // Verify config content unchanged
+    let final_config = fs::read_to_string(&config_path).unwrap();
+    assert_eq!(final_config.trim(), complete_config.trim());
+}

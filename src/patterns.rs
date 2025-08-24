@@ -3,34 +3,6 @@
 use crate::types::Config;
 use std::collections::HashMap;
 
-/// Creates a properly formatted TOML file with project-specific command mappings
-/// and common safety alternatives. Uses the toml crate for proper serialization.
-/// 
-/// # Arguments
-/// * `project_type` - The type of project ("Node.js", "Python", "Rust", etc.)
-/// 
-/// # Returns
-/// * `String` - Complete TOML configuration content with header and mappings
-pub fn generate_config_for_project(project_type: &str) -> String {
-    let commands = get_commands_for_project_type(project_type);
-    let config = Config { 
-        commands,
-        semantic_directories: HashMap::new(),
-        directory_variables: Default::default(),
-    };
-    
-    let header = format!(
-        "# Claude Hook Advisor Configuration\n# Auto-generated for {project_type} project\n\n"
-    );
-    
-    match toml::to_string_pretty(&config) {
-        Ok(toml_content) => format!("{header}{toml_content}"),
-        Err(_) => {
-            // Fallback to basic config if serialization fails
-            format!("{header}[commands]\n# Basic configuration\n")
-        }
-    }
-}
 
 /// Creates command mappings based on project type.
 /// 

@@ -11,6 +11,7 @@ Welcome to the Claude Hook Advisor documentation! This directory contains compre
 
 ### Configuration
 - [**Configuration Guide**](configuration.md) - Complete configuration reference
+- [**Directory Aliasing Guide**](directory-aliasing.md) - Semantic directory references and variable substitution
 - [**Example Configurations**](examples.md) - Real-world configuration examples
 - [**Best Practices**](best-practices.md) - Tips for effective configuration
 

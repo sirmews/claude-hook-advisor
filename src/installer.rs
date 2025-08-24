@@ -1,6 +1,5 @@
 //! Installation and project setup logic
 
-use crate::patterns::generate_config_for_project;
 use crate::types::Config;
 use anyhow::{anyhow, Context, Result};
 use serde_json::{Map, Value};
@@ -8,163 +7,8 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-/// Interactive installer that sets up Claude Hook Advisor for a project.
-/// 
-/// Detects the project type, generates appropriate configuration, and provides
-/// integration instructions for Claude Code. Prompts before overwriting existing configs.
-/// 
-/// # Arguments
-/// * `config_path` - Path where the configuration file should be created
-/// 
-/// # Returns
-/// * `Ok(())` - Installation completed successfully
-/// * `Err` - If file operations fail or user cancels installation
-pub fn run_installer(config_path: &str) -> Result<()> {
-    println!("🚀 Claude Hook Advisor Installer");
-    println!("==================================");
 
-    // Check if config already exists
-    if Path::new(config_path).exists() {
-        println!("⚠️  Configuration file '{config_path}' already exists.");
-        print!("Do you want to overwrite it? (y/N): ");
-        io::stdout().flush()?;
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-
-        if !input.trim().to_lowercase().starts_with('y') {
-            println!("Installation cancelled.");
-            return Ok(());
-        }
-    }
-
-    // Detect project type and suggest appropriate config
-    let project_type = detect_project_type()?;
-    let config_content = generate_config_for_project(&project_type);
-
-    // Write configuration file
-    fs::write(config_path, &config_content)
-        .with_context(|| format!("Failed to write config file: {config_path}"))?;
-
-    println!("✅ Created configuration file: {config_path}");
-    println!("📋 Configuration type: {project_type}");
-    println!();
-
-    // Show what was configured
-    println!("📝 Command mappings configured:");
-    let config: Config = toml::from_str(&config_content)?;
-    for (from, to) in &config.commands {
-        println!("   {from} → {to}");
-    }
-    println!();
-
-    // Provide Claude Code integration instructions
-    print_claude_integration_instructions()?;
-
-    println!("🎉 Installation complete! Claude Hook Advisor is ready to use.");
-
-    Ok(())
-}
-
-/// Detects the project type by examining files in the current directory.
-/// 
-/// Checks for common project indicators like package.json, Cargo.toml, etc.
-/// Returns "General" as fallback if no specific project type is detected.
-/// 
-/// # Returns
-/// * `Ok(String)` - Detected project type ("Node.js", "Python", "Rust", etc.)
-/// * `Err` - If current directory cannot be accessed
-pub fn detect_project_type() -> Result<String> {
-    let current_dir = std::env::current_dir()?;
-
-    // Check for various project indicators
-    if current_dir.join("package.json").exists() {
-        return Ok("Node.js".to_string());
-    }
-
-    if current_dir.join("requirements.txt").exists()
-        || current_dir.join("pyproject.toml").exists()
-        || current_dir.join("setup.py").exists()
-    {
-        return Ok("Python".to_string());
-    }
-
-    if current_dir.join("Cargo.toml").exists() {
-        return Ok("Rust".to_string());
-    }
-
-    if current_dir.join("go.mod").exists() {
-        return Ok("Go".to_string());
-    }
-
-    if current_dir.join("pom.xml").exists() || current_dir.join("build.gradle").exists() {
-        return Ok("Java".to_string());
-    }
-
-    if current_dir.join("Dockerfile").exists() {
-        return Ok("Docker".to_string());
-    }
-
-    Ok("General".to_string())
-}
-
-/// Prints detailed instructions for integrating with Claude Code.
-/// 
-/// Shows multiple integration options including the /hooks command and manual
-/// .claude/settings.json configuration. Uses const strings and format! for
-/// better maintainability.
-/// 
-/// # Returns
-/// * `Ok(())` - Instructions printed successfully
-/// * `Err` - If current executable path cannot be determined
-pub fn print_claude_integration_instructions() -> Result<()> {
-    let binary_path = std::env::current_exe()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "claude-hook-advisor".to_string());
-
-    const HEADER: &str = r#"🔧 Claude Code Integration Setup:
-==================================
-
-To integrate with Claude Code, you have several options:
-
-Option 1: Using the /hooks command in Claude Code
-  1. Run `/hooks` in Claude Code
-  2. Select `PreToolUse`
-  3. Add matcher: `Bash`"#;
-
-    const JSON_TEMPLATE: &str = r#"{{
-  "hooks": {{
-    "PreToolUse": [
-      {{
-        "matcher": "Bash",
-        "hooks": [
-          {{
-            "type": "command",
-            "command": "{} --hook"
-          }}
-        ]
-      }}
-    ]
-  }}
-}}"#;
-
-    print!(
-        r#"{HEADER}
-  4. Add hook command: `{binary_path} --hook`
-  5. Save to project settings
-
-Option 2: Manual .claude/settings.json configuration
-Add this to your .claude/settings.json:
-
-{json_config}
-
-"#,
-        binary_path = binary_path,
-        json_config = JSON_TEMPLATE.replace("{}", &binary_path)
-    );
-
-    Ok(())
-}
 
 /// Installs Claude Hook Advisor hooks directly into Claude Code settings.
 /// 
@@ -202,7 +46,7 @@ pub fn install_claude_hooks() -> Result<()> {
 
     println!("✅ Hooks successfully installed!");
     println!("🎯 Claude Hook Advisor will now intercept Bash commands in Claude Code");
-    println!("📋 Run claude-hook-advisor --list-learned to see active mappings");
+    println!("📋 Run claude-hook-advisor --list-directory-aliases to see active directory mappings");
 
     Ok(())
 }
@@ -439,188 +283,14 @@ fn write_settings_file(settings_path: &Path, settings: &Value) -> Result<()> {
     Ok(())
 }
 
-/// Uninstalls Claude Hook Advisor hooks from Claude Code settings.
-/// 
-/// This function:
-/// 1. Detects existing Claude settings file location
-/// 2. Creates a timestamped backup of existing settings
-/// 3. Removes only claude-hook-advisor hooks while preserving all other hooks
-/// 4. Cleans up empty hook groups after removal
-/// 
-/// # Returns
-/// * `Ok(())` - Hooks uninstalled successfully
-/// * `Err` - If file operations fail or no settings file exists
-pub fn uninstall_claude_hooks() -> Result<()> {
-    println!("🔧 Claude Hook Advisor - Hooks Uninstallation");
-    println!("===============================================");
 
-    // Find existing settings file
-    let settings_path = find_existing_settings_file()?;
-    println!("📁 Using settings file: {}", settings_path.display());
 
-    // Create backup before modifying
-    create_settings_backup(&settings_path)?;
 
-    // Load existing settings
-    let mut settings = load_or_create_settings(&settings_path)?;
-
-    // Remove our hooks from existing settings
-    let removed_count = remove_claude_hooks(&mut settings)?;
-
-    if removed_count == 0 {
-        println!("ℹ️  No Claude Hook Advisor hooks found to remove");
-        return Ok(());
-    }
-
-    // Write updated settings back to file
-    write_settings_file(&settings_path, &settings)?;
-
-    println!("✅ Hooks successfully uninstalled!");
-    println!("🗑️  Removed {removed_count} claude-hook-advisor hook(s)");
-    println!("🎯 Claude Hook Advisor is no longer active in Claude Code");
-
-    Ok(())
-}
-
-/// Finds an existing Claude settings file, preferring local over shared.
-/// 
-/// # Returns
-/// * `Ok(PathBuf)` - Path to existing settings file
-/// * `Err` - If no Claude settings file exists
-fn find_existing_settings_file() -> Result<PathBuf> {
-    let claude_dir = PathBuf::from(".claude");
-    let local_settings = claude_dir.join("settings.local.json");
-    let shared_settings = claude_dir.join("settings.json");
-
-    if local_settings.exists() {
-        return Ok(local_settings);
-    }
-
-    if shared_settings.exists() {
-        return Ok(shared_settings);
-    }
-
-    Err(anyhow!("No Claude Code settings file found. Run 'claude-hook-advisor --install-hooks' first."))
-}
-
-/// Removes Claude Hook Advisor hooks from settings, preserving all other hooks.
-/// 
-/// This function carefully:
-/// - Only removes hooks containing "claude-hook-advisor"
-/// - Preserves all other hooks in the same groups
-/// - Removes empty hook groups after cleanup
-/// - Removes empty event arrays if no hooks remain
-/// 
-/// # Returns
-/// * `Ok(usize)` - Number of claude-hook-advisor hooks removed
-/// * `Err` - If JSON structure is invalid
-fn remove_claude_hooks(settings: &mut Value) -> Result<usize> {
-    let settings_obj = settings.as_object_mut()
-        .ok_or_else(|| anyhow!("Settings must be a JSON object"))?;
-
-    // If no hooks section exists, nothing to remove
-    if !settings_obj.contains_key("hooks") {
-        return Ok(0);
-    }
-
-    let hooks = settings_obj.get_mut("hooks")
-        .and_then(|h| h.as_object_mut())
-        .ok_or_else(|| anyhow!("hooks must be an object"))?;
-
-    let mut total_removed = 0;
-
-    // Process each hook event type
-    let event_names: Vec<String> = hooks.keys().cloned().collect();
-    
-    for event_name in event_names {
-        let removed_count = remove_hooks_from_event(hooks, &event_name)?;
-        total_removed += removed_count;
-    }
-
-    // Clean up empty hooks object if no events remain
-    if hooks.is_empty() {
-        settings_obj.remove("hooks");
-    }
-
-    Ok(total_removed)
-}
-
-/// Removes claude-hook-advisor hooks from a specific event type.
-/// 
-/// # Returns
-/// * `Ok(usize)` - Number of hooks removed from this event
-/// * `Err` - If JSON structure is invalid
-fn remove_hooks_from_event(hooks: &mut Map<String, Value>, event_name: &str) -> Result<usize> {
-    let event_hooks = match hooks.get_mut(event_name) {
-        Some(hooks_array) => hooks_array.as_array_mut()
-            .ok_or_else(|| anyhow!("{} hooks must be an array", event_name))?,
-        None => return Ok(0),
-    };
-
-    let mut total_removed = 0;
-
-    // Process each hook group in reverse order so we can safely remove empty groups
-    let mut i = 0;
-    while i < event_hooks.len() {
-        let hook_group = &mut event_hooks[i];
-        let hook_obj = hook_group.as_object_mut()
-            .ok_or_else(|| anyhow!("Hook group must be an object"))?;
-
-        if let Some(hooks_array) = hook_obj.get_mut("hooks")
-            .and_then(|h| h.as_array_mut()) {
-            
-            // Count hooks before removal
-            let initial_count = hooks_array.len();
-            
-            // Remove claude-hook-advisor hooks
-            hooks_array.retain(|hook| {
-                if let Some(cmd) = hook.get("command").and_then(|c| c.as_str()) {
-                    !cmd.contains("claude-hook-advisor")
-                } else {
-                    true
-                }
-            });
-
-            // Calculate how many were removed
-            let removed_from_group = initial_count - hooks_array.len();
-            total_removed += removed_from_group;
-
-            // If this hook group is now empty, remove the entire group
-            if hooks_array.is_empty() {
-                event_hooks.remove(i);
-                // Don't increment i since we removed an element
-            } else {
-                i += 1;
-            }
-        } else {
-            i += 1;
-        }
-    }
-
-    // If this event type has no hook groups left, remove the entire event
-    if event_hooks.is_empty() {
-        hooks.remove(event_name);
-    }
-
-    Ok(total_removed)
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_project_type_detection() {
-        // Test detection returns a valid project type
-        let result = detect_project_type();
-        assert!(result.is_ok());
-        let project_type = result.unwrap();
-        assert!(!project_type.is_empty());
-        
-        // Should be one of the known types (checking actual return values)
-        let known_types = ["Node.js", "Python", "Rust", "Go", "General"];
-        assert!(known_types.contains(&project_type.as_str()));
-    }
 
     #[test]
     fn test_merge_hooks_empty_settings() {
@@ -721,7 +391,7 @@ mod tests {
     }
 
     #[test]
-    fn test_install_and_uninstall_full_cycle() {
+    fn test_install_hooks() {
         // Start with a realistic settings file with existing hooks and permissions
         let mut settings = serde_json::json!({
             "permissions": {
@@ -801,167 +471,11 @@ mod tests {
         let permissions = settings.get("permissions").unwrap().as_object().unwrap();
         assert_eq!(permissions.get("allow").unwrap().as_array().unwrap().len(), 2);
         assert_eq!(permissions.get("deny").unwrap().as_array().unwrap().len(), 1);
-
-        // Now uninstall our hooks
-        let uninstall_result = remove_claude_hooks(&mut settings);
-        assert!(uninstall_result.is_ok());
-        let removed_count = uninstall_result.unwrap();
-        assert_eq!(removed_count, 3); // Should remove 3 claude-hook-advisor hooks
-
-        // Verify uninstallation
-        let hooks_after = settings.get("hooks").unwrap().as_object().unwrap();
-        
-        // Should have 2 hook event types (the original ones)
-        assert_eq!(hooks_after.len(), 2);
-        assert!(hooks_after.contains_key("PreToolUse"));
-        assert!(hooks_after.contains_key("PostToolUse"));
-        assert!(!hooks_after.contains_key("UserPromptSubmit")); // Should be removed completely
-
-        // Check PreToolUse only has Write matcher now
-        let pre_tool_use_after = hooks_after.get("PreToolUse").unwrap().as_array().unwrap();
-        assert_eq!(pre_tool_use_after.len(), 1);
-        assert_eq!(pre_tool_use_after[0].get("matcher").unwrap().as_str().unwrap(), "Write");
-
-        // Check PostToolUse only has Edit matcher now  
-        let post_tool_use_after = hooks_after.get("PostToolUse").unwrap().as_array().unwrap();
-        assert_eq!(post_tool_use_after.len(), 1);
-        assert_eq!(post_tool_use_after[0].get("matcher").unwrap().as_str().unwrap(), "Edit");
-
-        // Verify permissions were still preserved
-        let permissions_after = settings.get("permissions").unwrap().as_object().unwrap();
-        assert_eq!(permissions_after.get("allow").unwrap().as_array().unwrap().len(), 2);
-        assert_eq!(permissions_after.get("deny").unwrap().as_array().unwrap().len(), 1);
     }
 
-    #[test]
-    fn test_uninstall_mixed_hooks_preserves_others() {
-        // Settings with mixed hooks in same groups
-        let mut settings = serde_json::json!({
-            "hooks": {
-                "PreToolUse": [
-                    {
-                        "matcher": "Bash",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "claude-hook-advisor --hook"
-                            },
-                            {
-                                "type": "command",
-                                "command": "security-checker --validate"
-                            },
-                            {
-                                "type": "command",
-                                "command": "old-claude-hook-advisor --legacy"
-                            }
-                        ]
-                    }
-                ]
-            }
-        });
 
-        let result = remove_claude_hooks(&mut settings);
-        assert!(result.is_ok());
-        let removed_count = result.unwrap();
-        assert_eq!(removed_count, 2); // Should remove 2 claude-hook-advisor hooks
 
-        let hooks = settings.get("hooks").unwrap().as_object().unwrap();
-        let pre_tool_use = hooks.get("PreToolUse").unwrap().as_array().unwrap();
-        let bash_hooks = &pre_tool_use[0].get("hooks").unwrap().as_array().unwrap();
-        
-        // Should have 1 hook remaining
-        assert_eq!(bash_hooks.len(), 1);
-        assert_eq!(bash_hooks[0].get("command").unwrap().as_str().unwrap(), 
-                   "security-checker --validate");
-    }
 
-    #[test]
-    fn test_uninstall_removes_empty_groups() {
-        // Settings where claude-hook-advisor is the only hook in groups
-        let mut settings = serde_json::json!({
-            "hooks": {
-                "PreToolUse": [
-                    {
-                        "matcher": "Bash",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "claude-hook-advisor --hook"
-                            }
-                        ]
-                    }
-                ],
-                "UserPromptSubmit": [
-                    {
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "claude-hook-advisor --hook"
-                            }
-                        ]
-                    }
-                ]
-            }
-        });
-
-        let result = remove_claude_hooks(&mut settings);
-        assert!(result.is_ok());
-        let removed_count = result.unwrap();
-        assert_eq!(removed_count, 2);
-
-        // Entire hooks section should be removed since all groups are empty
-        assert!(!settings.as_object().unwrap().contains_key("hooks"));
-    }
-
-    #[test]
-    fn test_uninstall_no_hooks_to_remove() {
-        let mut settings = serde_json::json!({
-            "permissions": {
-                "allow": ["Bash(git:*)"]
-            },
-            "hooks": {
-                "PreToolUse": [
-                    {
-                        "matcher": "Write",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "prettier --write"
-                            }
-                        ]
-                    }
-                ]
-            }
-        });
-
-        let result = remove_claude_hooks(&mut settings);
-        assert!(result.is_ok());
-        let removed_count = result.unwrap();
-        assert_eq!(removed_count, 0);
-
-        // Settings should be unchanged
-        let hooks = settings.get("hooks").unwrap().as_object().unwrap();
-        assert_eq!(hooks.len(), 1);
-        assert!(settings.get("permissions").is_some());
-    }
-
-    #[test]
-    fn test_uninstall_no_hooks_section() {
-        let mut settings = serde_json::json!({
-            "permissions": {
-                "allow": ["Bash(git:*)"]
-            }
-        });
-
-        let result = remove_claude_hooks(&mut settings);
-        assert!(result.is_ok());
-        let removed_count = result.unwrap();
-        assert_eq!(removed_count, 0);
-
-        // Settings should be unchanged
-        assert!(!settings.as_object().unwrap().contains_key("hooks"));
-        assert!(settings.get("permissions").is_some());
-    }
 
     #[test]
     fn test_debug_assertions_consistency() {

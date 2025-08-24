@@ -6,7 +6,7 @@ tags: ["configuration", "toml", "commands", "mapping", "setup"]
 
 # Configuration Guide
 
-Claude Hook Advisor uses TOML configuration files to define command mappings. This guide covers all configuration options and patterns.
+Claude Hook Advisor uses TOML configuration files to define command mappings and semantic directory aliases. This guide covers all configuration options and patterns for both command intelligence and directory aliasing features.
 
 ## 📁 Configuration File Location
 
@@ -24,7 +24,29 @@ claude-hook-advisor --config /path/to/config.toml --hook
 claude-hook-advisor --hook  # Looks for .claude-hook-advisor.toml
 ```
 
-## 🔧 Basic Configuration Format
+## 🔧 Complete Configuration Format
+
+### Full Configuration Structure
+```toml
+# Command mappings for intelligent replacement
+[commands]
+npm = "bun"
+yarn = "bun"
+curl = "wget --verbose"
+
+# Semantic directory aliases for natural language references
+[semantic_directories]
+docs = "~/Documents/Documentation"
+central_docs = "~/Documents/Documentation"
+project_docs = "~/Documents/Documentation/{project}"
+claude_docs = "~/Documents/Documentation/claude"
+
+# Variables for dynamic path substitution
+[directory_variables]
+project = "my-project"          # Or auto-detected from git
+current_project = "my-project"
+user_home = "~"
+```
 
 ### Simple Command Mapping
 ```toml
@@ -88,6 +110,90 @@ For precise control, use quoted strings:
 **Does NOT match:**
 - `npm install-something` (not exact match)
 - `npm` alone (doesn't include "install")
+
+## 📁 Directory Aliasing Configuration
+
+### Basic Directory Aliases
+```toml
+[semantic_directories]
+# Simple directory aliases
+docs = "~/Documents/Documentation"
+notes = "~/Documents/Notes"
+projects = "~/Projects"
+```
+
+### Variable Substitution in Paths
+```toml
+[semantic_directories]
+# Use variables for dynamic paths
+project_docs = "~/Documents/Documentation/{project}"
+project_notes = "~/Notes/{project}"
+user_config = "{user_home}/.config"
+
+[directory_variables]
+# Define variables used in paths
+project = "my-awesome-project"      # Or auto-detected from git repo name
+current_project = "my-awesome-project"
+user_home = "/Users/username"       # Or from $HOME environment variable
+```
+
+### Common Directory Patterns
+```toml
+[semantic_directories]
+# Documentation locations
+docs = "~/Documents/Documentation"
+central_docs = "~/Documents/Documentation"
+project_docs = "~/Documents/Documentation/{project}"
+claude_docs = "~/Documents/Documentation/claude"
+
+# Development directories
+src = "./src"
+lib = "./lib"
+tests = "./tests"
+build = "./build"
+dist = "./dist"
+
+# Configuration directories
+config = "~/.config"
+local_config = "./.config"
+project_config = "{user_home}/.config/{project}"
+
+# Temporary and cache directories
+tmp = "/tmp"
+cache = "~/.cache"
+project_cache = "~/.cache/{project}"
+```
+
+### Directory Alias Management via CLI
+```bash
+# Add directory aliases
+claude-hook-advisor --add-directory-alias "docs" "~/Documents/Documentation"
+claude-hook-advisor --add-directory-alias "project_docs" "~/Documents/Documentation/{project}"
+
+# List all configured aliases
+claude-hook-advisor --list-directory-aliases
+
+# Resolve alias to canonical path
+claude-hook-advisor --resolve-directory "docs"
+
+# Remove alias
+claude-hook-advisor --remove-directory-alias "docs"
+```
+
+### Variable Detection and Substitution
+The tool automatically detects these variables:
+
+1. **Project Detection**: 
+   - Automatically detects git repository name as `{project}`
+   - Falls back to configured `directory_variables.project`
+   
+2. **Home Directory**:
+   - Uses `$HOME` environment variable
+   - Falls back to configured `directory_variables.user_home`
+
+3. **Custom Variables**:
+   - Define your own variables in `[directory_variables]`
+   - Use them in directory templates with `{variable_name}`
 
 ## 📚 Configuration Categories
 
