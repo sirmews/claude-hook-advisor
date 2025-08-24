@@ -208,7 +208,6 @@ fn create_smart_config(config_path: &str) -> Result<()> {
 {toml_content}
 # Semantic directory aliases - natural language directory references
 # Uncomment and customize these examples:
-# [semantic_directories]
 # docs = "~/Documents/Documentation"
 # central_docs = "~/Documents/Documentation"
 # project_docs = "~/Documents/Documentation/my-project"

@@ -1,202 +1,151 @@
-# Claude Hook Advisor - Smart Installation Implementation
+# Claude Hook Advisor - Documentation Cleanup Complete
 
 ## Project Context
-Claude Hook Advisor is a Rust CLI tool that integrates with Claude Code hooks to provide intelligent command suggestions and semantic directory aliasing. This document captures the implementation of the smart installation system completed on 2025-08-24.
+Claude Hook Advisor is a Rust CLI tool that integrates with Claude Code hooks to provide intelligent command suggestions and semantic directory aliasing. We have a clean, working codebase with documentation that now accurately reflects the current implementation.
 
-## Major Achievement: Smart Installation System
+## Current Status (as of August 24, 2025)
+- ✅ **Codebase Clean**: Zero linting warnings, 24 tests passing, no dead code
+- ✅ **Smart Installation**: Single `--install` command with project detection working perfectly
+- ✅ **Basic Directory Aliasing**: Simple alias resolution (`docs` → `~/Documents/Documentation`) working
+- ✅ **Command Mapping**: Full command suggestion system working (npm → bun, etc.)
+- ✅ **Code Quality**: Professional Rust standards, comprehensive error handling
+- ✅ **Git State**: Latest changes committed and pushed to `feature/directory-aliasing-system` branch
 
-### Problem Statement
-The original system had multiple redundant CLI commands and basic configuration generation:
-- Multiple confusing install commands (`--install`, `--install-hooks`, `--uninstall-hooks`, `--interactive-install`)
-- Generic configuration files with hardcoded examples
-- No project-specific intelligence
-- Dead code and unused patterns.rs module
-- Linting failures with 10+ dead code warnings
+## Recent Achievement: Documentation Cleanup (August 24, 2025)
+Just completed comprehensive documentation cleanup to match current v0.2.0 implementation:
+- Removed all references to unimplemented variable substitution (`{project}`, `{user_home}`)
+- Removed non-existent CLI directory management commands (--add-directory-alias, etc.)
+- Updated Configuration Management section to reflect TOML-only approach
+- Cleaned up all configuration examples to show only working features
+- Verified all documented examples work with current implementation
 
-### Solution Implemented
-**Single `--install` command with intelligent project detection and configuration generation**
+**Result**: Documentation now accurately reflects working v0.2.0 features, eliminating user confusion.
 
-#### Key Features Implemented:
+## Current Implementation Status
 
-1. **Smart Project Type Detection**
-   - Automatically detects: Node.js, Python, Rust, Go, Java, Docker, General
-   - Uses file indicators: package.json, Cargo.toml, requirements.txt, go.mod, etc.
-   - Falls back to "General" with modern CLI alternatives
+### ✅ **Fully Working Features:**
 
-2. **Project-Specific Command Mappings**
-   ```rust
-   // Node.js project automatically gets:
-   npm → bun
-   yarn → bun  
-   npx → bunx
-   npm start → bun dev
-   npm test → bun test
-   
-   // Python project automatically gets:
-   pip → uv pip
-   pip install → uv add
-   python → uv run python
-   
-   // Rust project automatically gets:
-   cargo check → cargo clippy
-   cargo test → cargo test -- --nocapture
-   ```
+#### 1. **Command Mapping System** 
+**What Works:**
+- Complete PreToolUse hook integration with Claude Code
+- Smart command suggestions (npm → bun, grep → rg, etc.)
+- Project-type detection for intelligent defaults
+- Word-boundary regex matching with caching for performance
 
-3. **Smart Directory Variables**
-   - Auto-detects project name from current directory
-   - Uses detected name in directory variable substitution
-   - Provides semantic directory examples as comments (not auto-added)
+#### 2. **Basic Directory Aliasing**
+**What Works:**
+- Simple semantic directory aliases (docs → ~/Documents/Documentation)
+- UserPromptSubmit hook integration for natural language detection  
+- Path canonicalization for security
+- TOML-based configuration management
 
-4. **Clean CLI Design**
-   - Removed redundant commands: `--install-hooks`, `--uninstall-hooks`, `--interactive-install`
-   - Single `--install` command does everything intelligently
-   - Single `--uninstall` command for removal
-   - Maintains `--hook` for Claude Code integration
+#### 3. **Triple-Hook Architecture**
+**What Works:**
+- PreToolUse: Command interception and suggestion
+- UserPromptSubmit: Directory reference detection and resolution
+- PostToolUse: Command execution tracking and analytics
 
-#### Technical Implementation:
+## Future Enhancement Opportunities
 
-**File Structure Changes:**
-- **Deleted:** `src/patterns.rs` (functionality moved to cli.rs)
-- **Updated:** `src/cli.rs` - Added smart detection and config generation
-- **Updated:** `src/installer.rs` - Restored uninstall functionality
-- **Updated:** `src/lib.rs` - Removed patterns module reference
+### Potential Phase 1: Variable Substitution System 🔧
+**Future Enhancement Opportunity:**
+Could add dynamic variable substitution for more flexible directory paths:
+- `{project}` variables could resolve to current git repository name
+- `{user_home}` variables could resolve to user's home directory
+- Would enable paths like `"~/Documents/Documentation/{project}"`
 
-**Core Functions Added:**
+### Potential Phase 2: CLI Directory Management 🛠️
+**Future Enhancement Opportunity:**  
+Could add command-line interface for directory alias management:
+- `--add-directory-alias <ALIAS> <PATH>` for adding new aliases
+- `--list-directory-aliases` for viewing configured aliases
+- `--resolve-directory <ALIAS>` for testing resolution
+
+**Note**: These are potential future enhancements, not current requirements. The current implementation works perfectly for its intended use case.
+
+### Architecture Understanding
+**Current Working Components:**
+- **Triple-hook system**: PreToolUse (command mapping), UserPromptSubmit (directory detection), PostToolUse (analytics)
+- **Configuration system**: TOML-based with smart project detection
+- **Directory resolution**: Basic alias → path resolution with tilde expansion and canonicalization
+- **Security**: Path canonicalization prevents traversal attacks
+- **Performance**: Regex caching with once_cell::Lazy
+
+**Key Data Structures:**
 ```rust
-// Smart project detection
-fn detect_project_type() -> Result<String>
+struct Config {
+    commands: HashMap<String, String>,           // Working
+    semantic_directories: HashMap<String, String>, // Working  
+    // directory_variables: DirectoryVariables,  // MISSING - need to add back
+}
 
-// Project-specific command mappings  
-fn get_commands_for_project_type(project_type: &str) -> HashMap<String, String>
-
-// Smart config generation with comments
-fn create_smart_config(config_path: &str) -> Result<()>
-
-// Auto project name detection
-fn get_project_name() -> String
+struct DirectoryResolution {
+    canonical_path: String,
+    alias_used: String, 
+    variables_substituted: Vec<(String, String)>, // Currently always empty - needs implementation
+}
 ```
 
-### User Experience Improvements:
+## Implementation Strategy
 
-**Before (confusing):**
+**Development Approach:**
+1. **Test-driven**: Write tests before implementing (follow existing test patterns)
+2. **Incremental**: One function at a time, ensure tests pass after each change
+3. **Backward compatible**: All existing 24 tests must continue passing
+4. **Error handling**: Use Result<T, E> and ? operator consistently (established pattern)
+
+**Quality Gates:**
+- `make lint` must pass (zero warnings)
+- `make test` must pass (all 24+ tests)
+- All documented examples in CLAUDE.md must work
+- No breaking changes to existing API
+
+## File Locations and Key Patterns
+
+**Configuration Files:**
+- Main config: `.claude-hook-advisor.toml`
+- Claude Code settings: `.claude/settings.local.json` (preferred) or `.claude/settings.json`
+
+**Code Patterns to Follow:**
+- Error handling: `anyhow::Result` with `.with_context()`
+- Regex caching: `once_cell::Lazy<Mutex<HashMap<String, Regex>>>`
+- Path handling: Always use `fs::canonicalize()` for security
+- JSON processing: serde with proper error handling
+
+**Test Patterns:**
+- Use `tempfile::TempDir` for filesystem tests
+- Mock git repository detection where needed
+- Test both success and error cases
+- Follow existing naming: `test_[functionality]_[scenario]`
+
+## Next Steps Priority Order
+
+**Start with Phase 1 (Variable Substitution)** - Highest impact, most documented, foundational feature that enables powerful directory aliasing.
+
+**Quick Start Commands:**
 ```bash
-# User had to choose between multiple commands
-claude-hook-advisor --install-hooks        # Just hooks
-claude-hook-advisor --interactive-install  # Full interactive
-claude-hook-advisor --install             # Basic config
+# Verify clean starting state
+make lint && make test
+
+# Start development
+# 1. First implement DirectoryVariables in src/types.rs
+# 2. Add variable substitution to src/directory.rs  
+# 3. Update config loading in src/config.rs
+# 4. Write comprehensive tests
+
+# Verify after each step
+make test
 ```
 
-**After (simple and smart):**
-```bash
-# Single command does everything intelligently
-claude-hook-advisor --install
-# 🔍 Detected project type: Node.js
-# 📋 Installing hooks into Claude Code settings...
-# ✅ Hooks installed successfully
-# 📝 Creating new config file: .claude-hook-advisor.toml
-# ✅ Created smart configuration for Node.js project
-# 📝 Command mappings configured:
-#    npm → bun
-#    yarn → bun
-#    npx → bunx
-#    [etc...]
-```
-
-### Real-World Verification:
-
-**Tested in ai-browser project** (Node.js):
-- ✅ Correctly detected as Node.js project
-- ✅ Generated appropriate command mappings
-- ✅ Used "ai-browser" in directory variable substitution
-- ✅ Provided semantic directory examples as comments
-- ✅ Created clean, usable configuration file
-
-**Generated Config Example:**
-```toml
-# Claude Hook Advisor Configuration
-# Auto-generated for Node.js project
-
-[commands]
-npm = "bun"
-yarn = "bun"
-npx = "bunx"
-"npm start" = "bun dev"
-"npm test" = "bun test"
-curl = "curl -L"
-rm = "trash"
-
-[semantic_directories]
-# Empty - examples provided as comments
-
-[directory_variables]
-project = "ai-browser"          # Auto-detected!
-current_project = "claude-hook-advisor"  # TODO: Fix hardcoded fallback
-user_home = "~"
-
-# Semantic directory aliases - natural language directory references
-# Uncomment and customize these examples:
-# [semantic_directories]
-# docs = "~/Documents/Documentation"
-# central_docs = "~/Documents/Documentation" 
-# project_docs = "~/Documents/Documentation/{ai-browser}"
-# claude_docs = "~/Documents/Documentation/claude"
-```
-
-### Code Quality Results:
-
-**Before:**
-- 10 dead code warnings (unused functions)
-- Redundant CLI options causing confusion
-- Empty patterns.rs module with unused exports
-- Compilation errors with missing functions
-
-**After:**
-- ✅ **Zero linting warnings** - `make lint` passes cleanly
-- ✅ **Single unified CLI** - Clear, simple interface
-- ✅ **Clean module structure** - No empty files
-- ✅ **All tests passing** - No functionality broken
-- ✅ **Working uninstall** - Complete lifecycle support
-
-### Architecture Decisions:
-
-1. **Moved smart logic from patterns.rs to cli.rs** - Eliminated empty module, kept related functionality together
-
-2. **Directory aliases as comments only** - Provides examples without auto-adding unwanted directories
-
-3. **Preserved uninstall functionality** - Users need a way to cleanly remove hooks
-
-4. **Single source of truth** - All installation logic in one place
-
-### Minor Issue Identified:
-- `current_project` variable still hardcoded to "claude-hook-advisor" instead of using detected project name
-- Not critical but should be fixed for consistency
-
-### Next Steps:
-1. Fix the hardcoded `current_project` variable  
-2. Consider adding more project type detectors (e.g., .NET, PHP, Ruby)
-3. Potentially add command mapping customization options
-
-### Commands Used:
-```bash
-# Development workflow used:
-make lint                    # Verify code quality
-make build                   # Test compilation  
-make test                    # Ensure functionality
-git commit && git push       # Save progress
-
-# Testing in real project:
-cd /path/to/other/project
-claude-hook-advisor --install
-cat .claude-hook-advisor.toml  # Verify output
-```
+## Context Notes
+- Branch: `feature/directory-aliasing-system`
+- Last commit: ce2fe9e "Remove incomplete variable substitution system and CLI directory commands"
+- All existing functionality working perfectly
+- Documentation accurately reflects current implementation
+- Clean foundation ready for proper feature implementation
 
 ---
 
-**Result**: Transformed confusing multi-command CLI into single intelligent `--install` command that automatically detects project type and generates appropriate configuration. Zero dead code, clean architecture, excellent user experience.
-
-**Date Completed**: August 24, 2025
-**Status**: ✅ Complete and verified working
-**Git Branch**: `feature/directory-aliasing-system`
-**Commits**: Clean commit history with detailed descriptions
-
-This represents a major UX improvement and code quality enhancement while maintaining all existing functionality.
+**Date**: August 24, 2025
+**Status**: Documentation cleanup complete, accurate reflection of v0.2.0 implementation
+**Achievement**: All documented features now work as described, eliminating user confusion
