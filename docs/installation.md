@@ -171,7 +171,7 @@ which claude-hook-advisor
 ### 2. Test Version Command
 ```bash
 claude-hook-advisor --version
-# Should show: claude-hook-advisor 0.1.0
+# Should show: claude-hook-advisor 0.2.0
 ```
 
 ### 3. Test Help Command
@@ -202,11 +202,9 @@ Expected output:
 
 #### Test Directory Aliasing
 ```bash
-# Add a directory alias
-claude-hook-advisor --add-directory-alias "docs" "~/Documents/Documentation"
-
-# Test directory resolution
-claude-hook-advisor --resolve-directory "docs"
+# Create a test configuration with directory aliases
+echo '[semantic_directories]
+docs = "~/Documents/Documentation"' > .claude-hook-advisor.toml
 
 # Test UserPromptSubmit hook
 echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check the docs directory"}' | claude-hook-advisor --hook
@@ -215,7 +213,7 @@ echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check 
 #### Install All Claude Code Hooks
 ```bash
 # Automatically install all three hooks with backup
-claude-hook-advisor --install-hooks
+claude-hook-advisor --install
 ```
 
 ## 🔄 Updating
@@ -328,31 +326,23 @@ claude-hook-advisor --help
 ### Hook Management
 ```bash
 # Install all hooks into Claude Code settings (with backup)
-claude-hook-advisor --install-hooks
+claude-hook-advisor --install
 
 # Remove hooks from Claude Code settings (with backup)  
-claude-hook-advisor --uninstall-hooks
-
-# Legacy project installer (interactive)
-claude-hook-advisor --install
+claude-hook-advisor --uninstall
 ```
 
 ### Directory Aliasing
+**Note:** Directory aliases are configured via TOML file only. No CLI management commands are available in v0.2.0.
+
 ```bash
-# Add semantic directory alias
-claude-hook-advisor --add-directory-alias "docs" "~/Documents/Documentation"
+# Create configuration file
+echo '[semantic_directories]
+docs = "~/Documents/Documentation"
+project_docs = "~/Documents/Documentation/my-project"' > .claude-hook-advisor.toml
 
-# Add alias with variable substitution
-claude-hook-advisor --add-directory-alias "project_docs" "~/Documents/Documentation/{project}"
-
-# List all configured directory aliases
-claude-hook-advisor --list-directory-aliases
-
-# Resolve alias to canonical path
-claude-hook-advisor --resolve-directory "docs"
-
-# Remove directory alias
-claude-hook-advisor --remove-directory-alias "docs"
+# Test directory resolution via hook
+echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook
 ```
 
 ## 🎯 Next Steps

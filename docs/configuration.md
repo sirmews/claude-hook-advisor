@@ -38,14 +38,8 @@ curl = "wget --verbose"
 [semantic_directories]
 docs = "~/Documents/Documentation"
 central_docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/{project}"
+project_docs = "~/Documents/Documentation/my-project"
 claude_docs = "~/Documents/Documentation/claude"
-
-# Variables for dynamic path substitution
-[directory_variables]
-project = "my-project"          # Or auto-detected from git
-current_project = "my-project"
-user_home = "~"
 ```
 
 ### Simple Command Mapping
@@ -122,20 +116,16 @@ notes = "~/Documents/Notes"
 projects = "~/Projects"
 ```
 
-### Variable Substitution in Paths
+### Static Path Mapping
 ```toml
 [semantic_directories]
-# Use variables for dynamic paths
-project_docs = "~/Documents/Documentation/{project}"
-project_notes = "~/Notes/{project}"
-user_config = "{user_home}/.config"
-
-[directory_variables]
-# Define variables used in paths
-project = "my-awesome-project"      # Or auto-detected from git repo name
-current_project = "my-awesome-project"
-user_home = "/Users/username"       # Or from $HOME environment variable
+# Direct alias-to-path mapping (no variable substitution)
+project_docs = "~/Documents/Documentation/my-awesome-project"
+project_notes = "~/Notes/my-awesome-project"
+user_config = "~/.config/my-project"
 ```
+
+**Note:** In v0.2.0, directory paths are static. No variable substitution is supported.
 
 ### Common Directory Patterns
 ```toml
@@ -143,7 +133,7 @@ user_home = "/Users/username"       # Or from $HOME environment variable
 # Documentation locations
 docs = "~/Documents/Documentation"
 central_docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/{project}"
+project_docs = "~/Documents/Documentation/my-project"
 claude_docs = "~/Documents/Documentation/claude"
 
 # Development directories
@@ -156,44 +146,41 @@ dist = "./dist"
 # Configuration directories
 config = "~/.config"
 local_config = "./.config"
-project_config = "{user_home}/.config/{project}"
+project_config = "~/.config/my-project"
 
 # Temporary and cache directories
 tmp = "/tmp"
 cache = "~/.cache"
-project_cache = "~/.cache/{project}"
+project_cache = "~/.cache/my-project"
 ```
 
-### Directory Alias Management via CLI
+### Directory Configuration via TOML File Only
 ```bash
-# Add directory aliases
-claude-hook-advisor --add-directory-alias "docs" "~/Documents/Documentation"
-claude-hook-advisor --add-directory-alias "project_docs" "~/Documents/Documentation/{project}"
+# Edit configuration file directly
+echo '[semantic_directories]
+docs = "~/Documents/Documentation"
+project_docs = "~/Documents/Documentation/my-project"' > .claude-hook-advisor.toml
 
-# List all configured aliases
-claude-hook-advisor --list-directory-aliases
-
-# Resolve alias to canonical path
-claude-hook-advisor --resolve-directory "docs"
-
-# Remove alias
-claude-hook-advisor --remove-directory-alias "docs"
+# Test directory resolution via hook
+echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook
 ```
 
-### Variable Detection and Substitution
-The tool automatically detects these variables:
+**Note:** No CLI commands for directory alias management in v0.2.0. Use TOML configuration only.
 
-1. **Project Detection**: 
-   - Automatically detects git repository name as `{project}`
-   - Falls back to configured `directory_variables.project`
+### Path Expansion (v0.2.0)
+The tool supports basic path expansion:
+
+1. **Tilde Expansion**: 
+   - `~` is automatically expanded to user home directory
+   - Example: `~/Documents` becomes `/Users/username/Documents`
    
-2. **Home Directory**:
-   - Uses `$HOME` environment variable
-   - Falls back to configured `directory_variables.user_home`
+2. **Static Paths Only**:
+   - No variable substitution or dynamic path generation
+   - Each alias maps directly to a fixed path
 
-3. **Custom Variables**:
-   - Define your own variables in `[directory_variables]`
-   - Use them in directory templates with `{variable_name}`
+3. **Path Canonicalization**:
+   - All paths are resolved to canonical absolute paths
+   - Provides security against directory traversal attacks
 
 ## 📚 Configuration Categories
 

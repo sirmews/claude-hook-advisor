@@ -371,7 +371,7 @@ fn ensure_config_sections(config_path: &str) -> Result<()> {
         config_content.push_str("[semantic_directories]\n");
         config_content.push_str("docs = \"~/Documents/Documentation\"\n");
         config_content.push_str("central_docs = \"~/Documents/Documentation\"\n");
-        config_content.push_str("docs = \"~/Documents/Documentation\"\n");
+        config_content.push_str("project_docs = \"~/Documents/Documentation/my-project\"\n");
         config_content.push_str("claude_docs = \"~/Documents/Documentation/claude\"\n\n");
         needs_update = true;
         println!("✅ Added [semantic_directories] section with default aliases");
