@@ -30,9 +30,9 @@ install-system: release
 	sudo cp target/release/claude-hook-advisor /usr/local/bin/
 	@echo "claude-hook-advisor installed to /usr/local/bin/claude-hook-advisor"
 
-# Run tests
+# Run tests (single-threaded to avoid race conditions in temp directory tests)
 test:
-	cargo test
+	cargo test -- --test-threads=1
 
 # Clean build artifacts
 clean:
@@ -54,15 +54,6 @@ check:
 run-example:
 	echo '{"session_id":"test","transcript_path":"","cwd":"","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm install","description":"Install packages"}}' | cargo run -- --hook
 
-# Create example config
-example-config:
-	@echo "Creating example .claude-hook-advisor.toml..."
-	@echo '[commands]' > .claude-hook-advisor.toml
-	@echo 'npm = "bun"' >> .claude-hook-advisor.toml
-	@echo 'yarn = "bun"' >> .claude-hook-advisor.toml
-	@echo 'npx = "bunx"' >> .claude-hook-advisor.toml
-	@echo 'curl = "wget --verbose"' >> .claude-hook-advisor.toml
-	@echo "Example config created: .claude-hook-advisor.toml"
 
 # Show help
 help:
@@ -78,5 +69,4 @@ help:
 	@echo "  lint          - Run clippy linting"
 	@echo "  check         - Check code without building"
 	@echo "  run-example   - Test with example JSON input"
-	@echo "  example-config- Create example .claude-hook-advisor.toml"
 	@echo "  help          - Show this help"

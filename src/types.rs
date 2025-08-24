@@ -13,21 +13,7 @@ pub struct Config {
     pub commands: HashMap<String, String>,
     #[serde(default)]
     pub semantic_directories: HashMap<String, String>,
-    #[serde(default)]
-    pub directory_variables: DirectoryVariables,
 }
-
-/// Directory variable substitution configuration.
-/// 
-/// Defines variables that can be used in semantic directory paths
-/// for dynamic path resolution (e.g., {project}, {user_home}).
-#[derive(Debug, Deserialize, Serialize, Default)]
-pub struct DirectoryVariables {
-    pub project: Option<String>,
-    pub current_project: Option<String>,
-    pub user_home: Option<String>,
-}
-
 
 /// Input data received from Claude Code hook system.
 /// 

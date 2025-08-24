@@ -241,7 +241,6 @@ mod tests {
         let config = Config { 
             commands,
             semantic_directories: HashMap::new(),
-            directory_variables: Default::default(),
         };
 
         // Test npm mapping
@@ -266,7 +265,6 @@ mod tests {
         let config = Config { 
             commands,
             semantic_directories: HashMap::new(),
-            directory_variables: Default::default(),
         };
 
         // Test word boundaries - "npm" in "my-npm-tool" should NOT match due to word boundaries

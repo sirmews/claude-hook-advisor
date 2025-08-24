@@ -192,7 +192,6 @@ fn create_smart_config(config_path: &str) -> Result<()> {
     let config = Config {
         commands,
         semantic_directories: std::collections::HashMap::new(), // Empty - will be comments only
-        directory_variables: create_default_variables(),
     };
     
     // Generate TOML content
@@ -200,7 +199,7 @@ fn create_smart_config(config_path: &str) -> Result<()> {
         .with_context(|| "Failed to serialize configuration to TOML")?;
     
     // Build the complete config with header and directory examples as comments
-    let project_name = get_project_name();
+    let _project_name = get_project_name();
     let final_content = format!(r#"# Claude Hook Advisor Configuration
 # Auto-generated for {project_type} project
 # This file configures command mappings and semantic directory aliases
@@ -212,7 +211,7 @@ fn create_smart_config(config_path: &str) -> Result<()> {
 # [semantic_directories]
 # docs = "~/Documents/Documentation"
 # central_docs = "~/Documents/Documentation"
-# project_docs = "~/Documents/Documentation/{{{project_name}}}"
+# project_docs = "~/Documents/Documentation/my-project"
 # claude_docs = "~/Documents/Documentation/claude"
 "#);
     
@@ -341,16 +340,6 @@ fn get_project_name() -> String {
         .unwrap_or_else(|| "project".to_string())
 }
 
-/// Creates default directory variables with project auto-detection.
-fn create_default_variables() -> crate::types::DirectoryVariables {
-    let project_name = get_project_name();
-        
-    crate::types::DirectoryVariables {
-        project: Some(project_name),
-        current_project: Some("claude-hook-advisor".to_string()), // Keep this as fallback
-        user_home: Some("~".to_string()),
-    }
-}
 
 /// Ensures required sections exist in an existing config file.
 /// 
@@ -383,20 +372,12 @@ fn ensure_config_sections(config_path: &str) -> Result<()> {
         config_content.push_str("[semantic_directories]\n");
         config_content.push_str("docs = \"~/Documents/Documentation\"\n");
         config_content.push_str("central_docs = \"~/Documents/Documentation\"\n");
-        config_content.push_str("project_docs = \"~/Documents/Documentation/{project}\"\n");
+        config_content.push_str("docs = \"~/Documents/Documentation\"\n");
         config_content.push_str("claude_docs = \"~/Documents/Documentation/claude\"\n\n");
         needs_update = true;
         println!("✅ Added [semantic_directories] section with default aliases");
     }
     
-    if !config_content.contains("[directory_variables]") {
-        config_content.push_str("# Directory variables for path substitution\n");
-        config_content.push_str("[directory_variables]\n");
-        config_content.push_str("project = \"claude-hook-advisor\"    # Auto-detected from git repository name\n");
-        config_content.push_str("user_home = \"~\"\n");
-        needs_update = true;
-        println!("✅ Added [directory_variables] section");
-    }
     
     if needs_update {
         fs::write(config_path, config_content)
@@ -580,22 +561,21 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let config_path = temp_dir.path().join("test-config.toml");
         
-        create_example_config(config_path.to_str().unwrap()).unwrap();
+        create_smart_config(config_path.to_str().unwrap()).unwrap();
         
         let content = fs::read_to_string(&config_path).unwrap();
         
         // Check that all required sections are present
         assert!(content.contains("[commands]"));
         assert!(content.contains("[semantic_directories]"));
-        assert!(content.contains("[directory_variables]"));
         
         // Check that default aliases are present
         assert!(content.contains("docs = \"~/Documents/Documentation\""));
-        assert!(content.contains("project_docs = \"~/Documents/Documentation/{project}\""));
+        assert!(content.contains("docs = \"~/Documents/Documentation\""));
         
         // Check that comments are present
         assert!(content.contains("# Claude Hook Advisor Configuration"));
-        assert!(content.contains("# npm = \"bun\""));
+        assert!(content.contains("# Uncomment and customize these examples:"));
     }
     
     #[test]
@@ -613,7 +593,6 @@ mod tests {
         // Check that all sections were added
         assert!(content.contains("[commands]"));
         assert!(content.contains("[semantic_directories]"));
-        assert!(content.contains("[directory_variables]"));
         
         // Check that examples were added
         assert!(content.contains("docs = \"~/Documents/Documentation\""));
@@ -631,9 +610,6 @@ npm = "bun"
 
 [semantic_directories]
 docs = "~/Documents"
-
-[directory_variables]
-project = "test"
 "#;
         fs::write(&config_path, existing_config).unwrap();
         

@@ -24,7 +24,6 @@ pub fn load_config(config_path: &str) -> Result<Config> {
         return Ok(Config {
             commands: HashMap::new(),
             semantic_directories: HashMap::new(),
-            directory_variables: Default::default(),
         });
     }
 
