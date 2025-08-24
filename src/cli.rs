@@ -49,24 +49,6 @@ pub fn run_cli() -> Result<()> {
                 .help("Remove Claude Hook Advisor hooks from Claude Code settings")
                 .action(clap::ArgAction::SetTrue),
         )
-        .arg(
-            Arg::new("install-hooks")
-                .long("install-hooks")
-                .help("Install hooks into Claude Code settings")
-                .action(clap::ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("uninstall-hooks")
-                .long("uninstall-hooks")
-                .help("Remove hooks from Claude Code settings")
-                .action(clap::ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("interactive-install")
-                .long("interactive-install")
-                .help("Run interactive installer with project type detection")
-                .action(clap::ArgAction::SetTrue),
-        )
         .get_matches();
 
     let config_path = matches.get_one::<String>("config")
@@ -130,7 +112,7 @@ fn run_smart_installation(config_path: &str) -> Result<()> {
         ensure_config_sections(config_path)?;
     } else {
         println!("📝 Creating new config file: {config_path}");
-        create_example_config(config_path)?;
+        create_smart_config(config_path)?;
     }
     
     println!("\n🎉 Installation complete! Claude Hook Advisor is ready to use.");
@@ -188,7 +170,9 @@ fn hooks_already_exist() -> Result<bool> {
     Ok(false)
 }
 
-/// Creates a new configuration file with examples and comments.
+/// Creates a smart configuration file with project-specific command mappings.
+/// Detects the project type and generates appropriate command mappings.
+/// Directory aliases are provided as commented examples only.
 /// 
 /// # Arguments
 /// * `config_path` - Path where to create the configuration file
@@ -196,36 +180,176 @@ fn hooks_already_exist() -> Result<bool> {
 /// # Returns
 /// * `Ok(())` - Configuration created successfully
 /// * `Err` - If file writing fails
-fn create_example_config(config_path: &str) -> Result<()> {
-    let example_config = r#"# Claude Hook Advisor Configuration
+fn create_smart_config(config_path: &str) -> Result<()> {
+    // Detect project type
+    let project_type = detect_project_type()?;
+    println!("🔍 Detected project type: {project_type}");
+    
+    // Get project-specific command mappings
+    let commands = get_commands_for_project_type(&project_type);
+    
+    // Create config structure with actual commands but empty directories
+    let config = Config {
+        commands,
+        semantic_directories: std::collections::HashMap::new(), // Empty - will be comments only
+        directory_variables: create_default_variables(),
+    };
+    
+    // Generate TOML content
+    let toml_content = toml::to_string_pretty(&config)
+        .with_context(|| "Failed to serialize configuration to TOML")?;
+    
+    // Build the complete config with header and directory examples as comments
+    let project_name = get_project_name();
+    let final_content = format!(r#"# Claude Hook Advisor Configuration
+# Auto-generated for {project_type} project
 # This file configures command mappings and semantic directory aliases
 # for use with Claude Code integration.
 
-# Command mappings - suggest alternatives when Claude Code runs these commands
-[commands]
-# npm = "bun"          # Suggest 'bun' instead of 'npm'
-# yarn = "bun"         # Suggest 'bun' instead of 'yarn'
-# npx = "bunx"         # Suggest 'bunx' instead of 'npx'
-# grep = "rg"          # Suggest 'rg' (ripgrep) instead of 'grep'
-
+{toml_content}
 # Semantic directory aliases - natural language directory references
-[semantic_directories]
-docs = "~/Documents/Documentation"
-central_docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/{project}"
-claude_docs = "~/Documents/Documentation/claude"
-
-# Directory variables for path substitution
-[directory_variables]
-project = "claude-hook-advisor"    # Auto-detected from git repository name
-user_home = "~"
-"#;
-
-    fs::write(config_path, example_config)
+# Uncomment and customize these examples:
+# [semantic_directories]
+# docs = "~/Documents/Documentation"
+# central_docs = "~/Documents/Documentation"
+# project_docs = "~/Documents/Documentation/{{{project_name}}}"
+# claude_docs = "~/Documents/Documentation/claude"
+"#);
+    
+    fs::write(config_path, final_content)
         .with_context(|| format!("Failed to write config file: {config_path}"))?;
     
-    println!("✅ Created example configuration with default directory aliases");
+    println!("✅ Created smart configuration for {project_type} project");
+    
+    // Show what was configured
+    if !config.commands.is_empty() {
+        println!("📝 Command mappings configured:");
+        for (from, to) in &config.commands {
+            println!("   {from} → {to}");
+        }
+    } else {
+        println!("📝 No specific command mappings for {project_type} - using general alternatives");
+    }
+    
     Ok(())
+}
+
+/// Detects the project type by examining files in the current directory.
+/// 
+/// # Returns
+/// * `Ok(String)` - Detected project type ("Node.js", "Python", "Rust", etc.)
+/// * `Err` - If current directory cannot be accessed
+fn detect_project_type() -> Result<String> {
+    let current_dir = std::env::current_dir()?;
+
+    // Check for various project indicators
+    if current_dir.join("package.json").exists() {
+        return Ok("Node.js".to_string());
+    }
+
+    if current_dir.join("requirements.txt").exists()
+        || current_dir.join("pyproject.toml").exists()
+        || current_dir.join("setup.py").exists()
+    {
+        return Ok("Python".to_string());
+    }
+
+    if current_dir.join("Cargo.toml").exists() {
+        return Ok("Rust".to_string());
+    }
+
+    if current_dir.join("go.mod").exists() {
+        return Ok("Go".to_string());
+    }
+
+    if current_dir.join("pom.xml").exists() || current_dir.join("build.gradle").exists() {
+        return Ok("Java".to_string());
+    }
+
+    if current_dir.join("Dockerfile").exists() {
+        return Ok("Docker".to_string());
+    }
+
+    Ok("General".to_string())
+}
+
+/// Creates project-specific command mappings based on detected project type.
+/// 
+/// # Arguments
+/// * `project_type` - The detected project type
+/// 
+/// # Returns
+/// * `HashMap<String, String>` - Command mappings for the project
+fn get_commands_for_project_type(project_type: &str) -> std::collections::HashMap<String, String> {
+    let mut commands = std::collections::HashMap::new();
+    
+    match project_type {
+        "Node.js" => {
+            commands.insert("npm".to_string(), "bun".to_string());
+            commands.insert("yarn".to_string(), "bun".to_string());
+            commands.insert("pnpm".to_string(), "bun".to_string());
+            commands.insert("npx".to_string(), "bunx".to_string());
+            commands.insert("npm start".to_string(), "bun dev".to_string());
+            commands.insert("npm test".to_string(), "bun test".to_string());
+            commands.insert("npm run build".to_string(), "bun run build".to_string());
+        }
+        "Python" => {
+            commands.insert("pip".to_string(), "uv pip".to_string());
+            commands.insert("pip install".to_string(), "uv add".to_string());
+            commands.insert("pip uninstall".to_string(), "uv remove".to_string());
+            commands.insert("python".to_string(), "uv run python".to_string());
+            commands.insert("python -m".to_string(), "uv run python -m".to_string());
+        }
+        "Rust" => {
+            commands.insert("cargo check".to_string(), "cargo clippy".to_string());
+            commands.insert("cargo test".to_string(), "cargo test -- --nocapture".to_string());
+        }
+        "Go" => {
+            commands.insert("go run".to_string(), "go run -race".to_string());
+            commands.insert("go test".to_string(), "go test -v".to_string());
+        }
+        "Java" => {
+            commands.insert("mvn".to_string(), "./mvnw".to_string());
+            commands.insert("gradle".to_string(), "./gradlew".to_string());
+        }
+        "Docker" => {
+            commands.insert("docker".to_string(), "podman".to_string());
+            commands.insert("docker-compose".to_string(), "podman-compose".to_string());
+        }
+        _ => {
+            // General project - modern CLI alternatives
+            commands.insert("cat".to_string(), "bat".to_string());
+            commands.insert("ls".to_string(), "eza".to_string());
+            commands.insert("grep".to_string(), "rg".to_string());
+            commands.insert("find".to_string(), "fd".to_string());
+        }
+    }
+    
+    // Add common safety and modern tool mappings for all project types
+    commands.insert("curl".to_string(), "curl -L".to_string());
+    commands.insert("rm".to_string(), "trash".to_string());
+    commands.insert("rm -rf".to_string(), "echo 'Use trash command for safety'".to_string());
+    
+    commands
+}
+
+/// Gets the current project name for variable substitution.
+fn get_project_name() -> String {
+    std::env::current_dir()
+        .ok()
+        .and_then(|dir| dir.file_name().map(|name| name.to_string_lossy().to_string()))
+        .unwrap_or_else(|| "project".to_string())
+}
+
+/// Creates default directory variables with project auto-detection.
+fn create_default_variables() -> crate::types::DirectoryVariables {
+    let project_name = get_project_name();
+        
+    crate::types::DirectoryVariables {
+        project: Some(project_name),
+        current_project: Some("claude-hook-advisor".to_string()), // Keep this as fallback
+        user_home: Some("~".to_string()),
+    }
 }
 
 /// Ensures required sections exist in an existing config file.

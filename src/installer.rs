@@ -1,6 +1,5 @@
 //! Installation and project setup logic
 
-use crate::types::Config;
 use anyhow::{anyhow, Context, Result};
 use serde_json::{Map, Value};
 use std::fs;
@@ -281,6 +280,117 @@ fn write_settings_file(settings_path: &Path, settings: &Value) -> Result<()> {
         .with_context(|| format!("Failed to write settings file: {}", settings_path.display()))?;
 
     Ok(())
+}
+
+/// Uninstalls Claude Hook Advisor hooks from Claude Code settings.
+pub fn uninstall_claude_hooks() -> Result<()> {
+    println!("🔧 Claude Hook Advisor - Hooks Uninstallation");
+    println!("===============================================");
+
+    let settings_path = find_existing_settings_file()?;
+    println!("📁 Using settings file: {}", settings_path.display());
+
+    create_settings_backup(&settings_path)?;
+    let mut settings = load_or_create_settings(&settings_path)?;
+    let removed_count = remove_claude_hooks(&mut settings)?;
+
+    if removed_count == 0 {
+        println!("ℹ️  No Claude Hook Advisor hooks found to remove");
+        return Ok(());
+    }
+
+    write_settings_file(&settings_path, &settings)?;
+    println!("✅ Hooks successfully uninstalled!");
+    println!("🗑️  Removed {removed_count} claude-hook-advisor hook(s)");
+    
+    Ok(())
+}
+
+fn find_existing_settings_file() -> Result<PathBuf> {
+    let claude_dir = PathBuf::from(".claude");
+    let local_settings = claude_dir.join("settings.local.json");
+    let shared_settings = claude_dir.join("settings.json");
+
+    if local_settings.exists() {
+        return Ok(local_settings);
+    }
+    if shared_settings.exists() {
+        return Ok(shared_settings);
+    }
+    Err(anyhow!("No Claude Code settings file found. Run 'claude-hook-advisor --install' first."))
+}
+
+fn remove_claude_hooks(settings: &mut Value) -> Result<usize> {
+    let settings_obj = settings.as_object_mut()
+        .ok_or_else(|| anyhow!("Settings must be a JSON object"))?;
+
+    if !settings_obj.contains_key("hooks") {
+        return Ok(0);
+    }
+
+    let hooks = settings_obj.get_mut("hooks")
+        .and_then(|h| h.as_object_mut())
+        .ok_or_else(|| anyhow!("hooks must be an object"))?;
+
+    let mut total_removed = 0;
+    let event_names: Vec<String> = hooks.keys().cloned().collect();
+    
+    for event_name in event_names {
+        let removed_count = remove_hooks_from_event(hooks, &event_name)?;
+        total_removed += removed_count;
+    }
+
+    if hooks.is_empty() {
+        settings_obj.remove("hooks");
+    }
+
+    Ok(total_removed)
+}
+
+fn remove_hooks_from_event(hooks: &mut Map<String, Value>, event_name: &str) -> Result<usize> {
+    let event_hooks = match hooks.get_mut(event_name) {
+        Some(hooks_array) => hooks_array.as_array_mut()
+            .ok_or_else(|| anyhow!("{} hooks must be an array", event_name))?,
+        None => return Ok(0),
+    };
+
+    let mut total_removed = 0;
+    let mut i = 0;
+    while i < event_hooks.len() {
+        let hook_group = &mut event_hooks[i];
+        let hook_obj = hook_group.as_object_mut()
+            .ok_or_else(|| anyhow!("Hook group must be an object"))?;
+
+        if let Some(hooks_array) = hook_obj.get_mut("hooks")
+            .and_then(|h| h.as_array_mut()) {
+            
+            let initial_count = hooks_array.len();
+            hooks_array.retain(|hook| {
+                if let Some(cmd) = hook.get("command").and_then(|c| c.as_str()) {
+                    !cmd.contains("claude-hook-advisor")
+                } else {
+                    true
+                }
+            });
+
+            let removed_from_group = initial_count - hooks_array.len();
+            total_removed += removed_from_group;
+
+            if hooks_array.is_empty() {
+                event_hooks.remove(i);
+            } else {
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+
+    if event_hooks.is_empty() {
+        hooks.remove(event_name);
+    }
+
+    Ok(total_removed)
 }
 
 

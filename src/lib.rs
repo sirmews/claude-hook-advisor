@@ -16,5 +16,4 @@ pub mod types;
 mod config;
 mod hooks;
 mod installer;
-mod patterns;
 mod directory;
