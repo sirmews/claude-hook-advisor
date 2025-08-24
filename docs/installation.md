@@ -204,7 +204,7 @@ Expected output:
 ```bash
 # Create a test configuration with directory aliases
 echo '[semantic_directories]
-docs = "~/Documents/Documentation"' > .claude-hook-advisor.toml
+"central docs" = "~/Documents/Documentation"' > .claude-hook-advisor.toml
 
 # Test UserPromptSubmit hook
 echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check the docs directory"}' | claude-hook-advisor --hook
@@ -338,8 +338,8 @@ claude-hook-advisor --uninstall
 ```bash
 # Create configuration file
 echo '[semantic_directories]
-docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/my-project"' > .claude-hook-advisor.toml
+"project docs" = "~/Documents/Documentation/my-project"
+"central docs" = "~/Documents/Documentation"' > .claude-hook-advisor.toml
 
 # Test directory resolution via hook
 echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook

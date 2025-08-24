@@ -36,10 +36,9 @@ curl = "wget --verbose"
 
 # Semantic directory aliases for natural language references
 [semantic_directories]
-docs = "~/Documents/Documentation"
-central_docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/my-project"
-claude_docs = "~/Documents/Documentation/claude"
+"central docs" = "~/Documents/Documentation"
+"project docs" = "~/Documents/Documentation/my-project"
+"claude docs" = "~/Documents/Documentation/claude"
 ```
 
 ### Simple Command Mapping
@@ -111,7 +110,7 @@ For precise control, use quoted strings:
 ```toml
 [semantic_directories]
 # Simple directory aliases
-docs = "~/Documents/Documentation"
+"central docs" = "~/Documents/Documentation"
 notes = "~/Documents/Notes"
 projects = "~/Projects"
 ```
@@ -125,16 +124,43 @@ project_notes = "~/Notes/my-awesome-project"
 user_config = "~/.config/my-project"
 ```
 
+### Natural Language Aliases (Space-Separated)
+```toml
+[semantic_directories]
+# Use quoted keys for multi-word, natural language aliases
+"project docs" = "~/Documents/Documentation/my-awesome-project"
+"project notes" = "~/Notes/my-awesome-project"
+"user config" = "~/.config/my-project"
+"claude docs" = "~/Documents/Documentation/claude"
+```
+
+**Advantage:** Space-separated aliases feel more natural in conversation:
+- *"Check the project docs directory"* → matches `"project docs"`
+- *"Look in user config folder"* → matches `"user config"`
+
+### Alias Precedence and Conflicts
+```toml
+[semantic_directories]
+# ⚠️ Problematic: overlapping aliases
+docs = "~/Documents/Documentation"           # Shorter alias
+"project docs" = "~/Documents/Documentation/project"  # Contains "docs"
+
+# ✅ Better: avoid overlapping aliases
+"central docs" = "~/Documents/Documentation"
+"project docs" = "~/Documents/Documentation/project"
+```
+
+**Important:** When multiple aliases could match the same text, shorter/simpler aliases take precedence. Avoid configuring both `docs` and `"project docs"` if you want `"project docs"` to match phrases like "check project docs directory".
+
 **Note:** In v0.2.0, directory paths are static. No variable substitution is supported.
 
 ### Common Directory Patterns
 ```toml
 [semantic_directories]
 # Documentation locations
-docs = "~/Documents/Documentation"
-central_docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/my-project"
-claude_docs = "~/Documents/Documentation/claude"
+"central docs" = "~/Documents/Documentation"
+"project docs" = "~/Documents/Documentation/my-project"
+"claude docs" = "~/Documents/Documentation/claude"
 
 # Development directories
 src = "./src"
@@ -158,8 +184,8 @@ project_cache = "~/.cache/my-project"
 ```bash
 # Edit configuration file directly
 echo '[semantic_directories]
-docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/my-project"' > .claude-hook-advisor.toml
+"central docs" = "~/Documents/Documentation"
+"project docs" = "~/Documents/Documentation/my-project"' > .claude-hook-advisor.toml
 
 # Test directory resolution via hook
 echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook

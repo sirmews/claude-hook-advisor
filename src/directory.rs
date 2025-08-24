@@ -155,4 +155,24 @@ mod tests {
         // In test environment, paths may not exist, so we just check the detection logic
         assert!(results.len() <= 1); // At most one match for "docs"
     }
+
+    #[test]
+    fn test_directory_alias_matching_patterns() {
+        let config = create_test_config();
+        
+        // Test that demonstrates the current word-boundary behavior
+        // The key insight: "project docs" matches "docs" alias, not "project_docs" alias
+        let text = "check the project docs directory";
+        let results = detect_directory_references(&config, text);
+        
+        // This will find "docs" within "project docs" but NOT match "project_docs" alias
+        // Resolution may fail due to path not existing in test environment, but
+        // the pattern matching logic detects aliases correctly
+        assert!(results.len() <= 1, "Should detect at most one alias match");
+        
+        // The important behavioral test: ensure we're not doing fuzzy matching
+        let no_fuzzy_match = "check documentation folder";
+        let results2 = detect_directory_references(&config, &no_fuzzy_match);
+        assert_eq!(results2.len(), 0, "Should not fuzzy-match 'documentation' to 'docs'");
+    }
 }

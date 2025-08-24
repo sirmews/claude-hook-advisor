@@ -88,13 +88,17 @@ claude-hook-advisor --uninstall-hooks
 Edit your `.claude-hook-advisor.toml` file to set up directory aliases:
 
 ```toml
-# Semantic directory aliases
+# Semantic directory aliases - use natural language!
 [semantic_directories]
-docs = "~/Documents/Documentation"
-central_docs = "~/Documents/Documentation" 
-project_docs = "~/Documents/Documentation/my-project"
-claude_docs = "~/Documents/Documentation/claude"
+"project docs" = "~/Documents/Documentation/my-project"
+"central docs" = "~/Documents/Documentation" 
+"claude docs" = "~/Documents/Documentation/claude"
+"test data" = "~/Documents/test-data"
 ```
+
+**Pro tip:** Use quoted, space-separated aliases for natural conversation:
+- *"Check the project docs folder"* → matches `"project docs"`
+- *"Look in test data directory"* → matches `"test data"`
 
 ### 3. Configure Command Mappings
 Create a `.claude-hook-advisor.toml` file in your project root:
@@ -107,12 +111,11 @@ yarn = "bun"
 npx = "bunx"
 curl = "wget --verbose"
 
-# Semantic directory aliases
+# Semantic directory aliases - natural language
 [semantic_directories]
-docs = "~/Documents/Documentation"
-central_docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/my-project"
-claude_docs = "~/Documents/Documentation/claude"
+"project docs" = "~/Documents/Documentation/my-project"
+"central docs" = "~/Documents/Documentation"
+"claude docs" = "~/Documents/Documentation/claude"
 ```
 
 ### Example Configurations

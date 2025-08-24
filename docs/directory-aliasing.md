@@ -6,7 +6,7 @@ tags: ["directory-aliasing", "semantic-directories", "path-resolution", "userpro
 
 # Directory Aliasing Guide
 
-Directory aliasing allows you to use natural language directory references in your conversations with Claude Code. Instead of typing full paths, use semantic names like "docs", "project_docs", or "central_docs" and let Claude Hook Advisor automatically resolve them to canonical filesystem paths.
+Directory aliasing allows you to use natural language directory references in your conversations with Claude Code. Instead of typing full paths, use semantic names like "project docs", "central docs", or "claude docs" and let Claude Hook Advisor automatically resolve them to canonical filesystem paths.
 
 **Current Implementation (v0.2.0):** Simple static alias-to-path mapping with tilde (~) expansion. No variable substitution or dynamic path generation.
 
@@ -35,15 +35,14 @@ Edit your `.claude-hook-advisor.toml` file:
 
 ```toml
 [semantic_directories]
-docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/my-project"
-central_docs = "~/Documents/Documentation"
+"central docs" = "~/Documents/Documentation"
+"project docs" = "~/Documents/Documentation/my-project"
 ```
 
 ### 3. Use in Conversations
 Now you can use natural language:
 - *"Please check the docs directory for installation instructions"*
-- *"Create a new file in project_docs"*
+- *"Create a new file in project docs"*
 - *"List files in central_docs"*
 
 ## 📁 Configuration Format
@@ -51,7 +50,7 @@ Now you can use natural language:
 ### Basic Configuration
 ```toml
 [semantic_directories]
-docs = "~/Documents/Documentation"
+"central docs" = "~/Documents/Documentation"
 notes = "~/Documents/Notes"
 projects = "~/Projects"
 tmp = "/tmp"
@@ -63,6 +62,34 @@ tmp = "/tmp"
 project_docs = "~/Documents/Documentation/my-project"
 project_notes = "~/Notes/my-project"
 user_config = "~/.config/my-project"
+```
+
+### Natural Language Aliases ✨
+```toml
+[semantic_directories]
+# Use quoted keys for space-separated, natural language aliases
+"project docs" = "~/Documents/Documentation/my-project"
+"project notes" = "~/Notes/my-project"  
+"user config" = "~/.config/my-project"
+"claude docs" = "~/Documents/Documentation/claude"
+"test data" = "~/Documents/test-data"
+```
+
+**Why use spaces?** Natural conversation flows:
+- *"What's in the project docs directory?"*
+- *"Check the user config folder"*
+- *"Look for test data files"*
+
+### ⚠️ Alias Conflicts to Avoid
+```toml
+[semantic_directories]
+# Problem: "project docs" contains "docs" - which one matches?
+docs = "~/Documents/Documentation"
+"project docs" = "~/Documents/Documentation/my-project"
+
+# Solution: Use non-overlapping aliases
+"central docs" = "~/Documents/Documentation" 
+"project docs" = "~/Documents/Documentation/my-project"
 ```
 
 **Note:** Each alias maps directly to a static path. The tilde (~) character is automatically expanded to your home directory.
@@ -99,11 +126,10 @@ Claude receives: "Directory reference 'docs' resolved to: /Users/you/Documents/D
 ```toml
 [semantic_directories]
 # Documentation hierarchy
-docs = "~/Documents/Documentation"
-central_docs = "~/Documents/Documentation"
-project_docs = "~/Documents/Documentation/my-project"
-claude_docs = "~/Documents/Documentation/claude"
-api_docs = "~/Documents/Documentation/my-project/api"
+"central docs" = "~/Documents/Documentation"
+"project docs" = "~/Documents/Documentation/my-project"
+"claude docs" = "~/Documents/Documentation/claude"
+"api docs" = "~/Documents/Documentation/my-project/api"
 
 # Development directories
 src = "./src"
