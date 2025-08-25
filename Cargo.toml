@@ -1,6 +1,6 @@
 [package]
 name = "claude-hook-advisor"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Navishkar Rao <sirmews@gmail.com>"]
 description = "A Claude Code hook that suggests better command alternatives based on project preferences"
