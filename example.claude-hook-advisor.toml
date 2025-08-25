@@ -95,3 +95,37 @@ scp = "rsync -avz --progress"        # Use rsync instead of scp
 "kubectl" = "k9s"                   # Better Kubernetes interface
 "terraform" = "tofu"                # OpenTofu instead of Terraform
 "aws" = "aws --cli-auto-prompt"     # AWS CLI with auto-prompt
+
+# ===== Semantic Directory Aliasing =====
+# Map semantic names to actual filesystem paths
+[semantic_directories]
+# Standard documentation directories
+docs = "~/Documents/Documentation"
+central_docs = "~/Documents/Documentation"
+project_docs = "~/Documents/Documentation/my-project"
+claude_docs = "~/Documents/Documentation/claude"
+
+# Development directories
+src = "./src"
+lib = "./lib"
+tests = "./tests"
+configs = "./config"
+scripts = "./scripts"
+
+# Project-specific directories
+api_docs = "~/Documents/Documentation/my-project/api"
+user_guides = "~/Documents/Documentation/my-project/guides"
+examples = "~/Documents/Documentation/my-project/examples"
+
+# Natural language aliases (requires quotes for spaces)
+"project docs" = "~/Documents/Documentation/my-project"
+"api documentation" = "~/Documents/Documentation/my-project/api"
+"user guides" = "~/Documents/Documentation/my-project/guides"
+"code examples" = "~/Documents/Documentation/my-project/examples"
+"config files" = "./config"
+"test files" = "./tests"
+
+# Personal knowledge management
+notes = "~/Documents/Notes"
+research = "~/Documents/Research" 
+bookmarks = "~/Documents/Bookmarks"
