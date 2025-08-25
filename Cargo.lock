@@ -191,6 +191,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "claude-doc-advisor",
  "once_cell",
  "regex",
  "serde",

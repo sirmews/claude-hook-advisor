@@ -1,0 +1,86 @@
+CLAUDE-DOC-ADVISOR PHASE 3: INTEGRATION
+
+=== PROJECT STATUS ===
+✅ PHASE 1 COMPLETE: Workspace conversion (claude-hook-advisor binary + claude-doc-advisor library)
+✅ PHASE 2 COMPLETE: Full claude-doc-advisor library implementation with 40 passing tests
+🔄 PHASE 3 NEXT: Integration with claude-hook-advisor binary for end-to-end functionality
+
+=== CURRENT ARCHITECTURE ===
+Cargo workspace in /Users/nav/Projects/crates/claude-hook-advisor/:
+- claude-hook-advisor/ (binary crate) - command mapping & directory aliasing with triple-hook system
+- claude-doc-advisor/ (library crate) - documentation standards enforcement 
+
+=== CLAUDE-DOC-ADVISOR API (Ready for Integration) ===
+Two-function library API:
+```rust
+pub fn get_documentation_standards() -> Result<DocumentationStandards, ValidationError>;
+pub fn validate_document_compliance<P: AsRef<Path>>(path: P) -> Result<ComplianceResult, ValidationError>;
+```
+
+Features implemented:
+- YAML frontmatter parsing with regex delimiter detection
+- Required field validation (title, created_at, updated_at, tags, description)
+- Date format validation (YYYY-MM-DD with chrono parsing)
+- Tag format validation (#kebab-case rules)
+- Filename convention checking (.md extension, kebab-case suggestions)
+- Comprehensive error handling with user-friendly messages
+- 40 tests passing (37 unit + 3 doc tests)
+
+=== INTEGRATION POINTS ===
+claude-hook-advisor uses triple-hook architecture that needs enhancement:
+
+1. **UserPromptSubmit Hook Enhancement** (src/hooks.rs:handle_user_prompt_submit)
+   - EXISTING: Directory reference detection ("check the docs directory") 
+   - NEW: Documentation keyword detection ("write documentation", "create guide")
+   - ACTION: Call get_documentation_standards() and output guidance text
+
+2. **PostToolUse Hook Enhancement** (src/hooks.rs:handle_post_tool_use) 
+   - EXISTING: Command execution tracking for analytics
+   - NEW: Markdown file creation/modification detection
+   - ACTION: Call validate_document_compliance() on detected .md files
+
+3. **Dependency Integration** (Cargo.toml)
+   - ADD: claude-doc-advisor = { path = "claude-doc-advisor" }
+   - IMPORT: Functions in hooks.rs
+   - TEST: Verify integration doesn't break existing functionality
+
+=== IMPLEMENTATION TASKS ===
+
+PHASE 3A: Basic Integration
+1. Add claude-doc-advisor dependency to root Cargo.toml
+2. Import functions in src/hooks.rs
+3. Add documentation keyword detection to handle_user_prompt_submit()
+4. Add markdown file detection to handle_post_tool_use()
+5. Test basic integration works
+
+PHASE 3B: Validation & Polish  
+1. Performance testing (ensure <100ms for hook context)
+2. Error handling refinement (graceful degradation)
+3. Integration testing with real .md files
+4. Update documentation and examples
+5. End-to-end testing with Claude Code hooks
+
+=== SUCCESS CRITERIA ===
+- claude-hook-advisor binary can call claude-doc-advisor functions
+- UserPromptSubmit provides documentation guidance when keywords detected
+- PostToolUse validates markdown files automatically  
+- All existing functionality preserved (25 tests still passing)
+- Performance suitable for hook context (<100ms operations)
+- Graceful error handling maintains hook resilience
+
+=== FILES TO MODIFY ===
+- Cargo.toml (add dependency)
+- src/hooks.rs (enhance handle_user_prompt_submit & handle_post_tool_use)
+- Potentially: src/lib.rs (if new functionality needs exports)
+
+=== BRANCH STATUS ===
+Currently on: feature/claude-doc-advisor-workspace
+All changes committed and pushed
+
+=== TESTING APPROACH ===
+- Verify existing tests: make test (25 tests claude-hook-advisor)
+- Verify library tests: cargo test -p claude-doc-advisor (40 tests)
+- Integration test: Manual hook testing with doc-related prompts/files
+- Performance test: Time critical operations to ensure <100ms
+
+START WITH: Adding claude-doc-advisor dependency and basic function imports in hooks.rs

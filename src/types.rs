@@ -54,13 +54,16 @@ pub struct ToolResponse {
 
 /// Tool-specific input parameters from Claude Code.
 /// 
-/// Contains the actual command and optional description for Bash tool invocations.
+/// Contains the actual command and optional description for Bash tool invocations,
+/// and file_path for file operations like Write, Edit, MultiEdit.
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct ToolInput {
     #[serde(default)]
     pub command: Option<String>,
     #[allow(dead_code)]
     pub description: Option<String>,
+    #[serde(default)]
+    pub file_path: Option<String>,
 }
 
 /// Response data sent back to Claude Code hook system.

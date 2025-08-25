@@ -4,10 +4,12 @@ use crate::config::load_config;
 use crate::directory::detect_directory_references;
 use crate::types::{Config, HookInput, HookOutput};
 use anyhow::{Context, Result};
+use claude_doc_advisor::{get_documentation_standards, validate_document_compliance};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
 use std::io::{self, Read};
+use std::path::Path;
 use std::sync::Mutex;
 
 /// Cache for compiled regex patterns to avoid recompilation
@@ -103,18 +105,19 @@ fn handle_pre_tool_use(config: &Config, hook_input: &HookInput, replace_mode: bo
     Ok(())
 }
 
-/// Handles UserPromptSubmit hook events for directory reference detection.
+/// Handles UserPromptSubmit hook events for directory reference detection and documentation guidance.
 /// 
 /// Analyzes user prompts for semantic directory references and outputs
 /// resolved canonical paths to help Claude Code understand directory context.
+/// Also detects documentation-related keywords and provides standards guidance.
 /// 
 /// # Arguments
 /// * `config` - Configuration containing directory mappings
 /// * `hook_input` - Hook input data containing user prompt
 /// 
 /// # Returns
-/// * `Ok(())` - Processing completed (may output directory resolutions)
-/// * `Err` - If directory resolution fails
+/// * `Ok(())` - Processing completed (may output directory resolutions and documentation guidance)
+/// * `Err` - If directory resolution or documentation standards retrieval fails
 fn handle_user_prompt_submit(config: &Config, hook_input: &HookInput) -> Result<()> {
     let Some(prompt) = &hook_input.prompt else {
         return Ok(());
@@ -137,20 +140,42 @@ fn handle_user_prompt_submit(config: &Config, hook_input: &HookInput) -> Result<
         }
     }
 
+    // Detect documentation keywords and provide guidance
+    if detect_documentation_keywords(prompt) {
+        match get_documentation_standards() {
+            Ok(standards) => {
+                println!("Documentation standards detected:");
+                println!("  Required frontmatter fields: {:?}", standards.required_frontmatter_fields);
+                println!("  Date format: {}", standards.date_format);
+                println!("  Tag rules: require_hash_prefix={}, prefer_kebab_case={}", 
+                    standards.tag_format_rules.require_hash_prefix,
+                    standards.tag_format_rules.prefer_kebab_case);
+                println!("  Filename conventions: {} with {}", 
+                    standards.filename_conventions.case_style,
+                    standards.filename_conventions.required_extension);
+                println!("\n{}", standards.guidance_text);
+            }
+            Err(e) => {
+                eprintln!("Warning: Could not retrieve documentation standards: {e}");
+            }
+        }
+    }
+
     Ok(())
 }
 
-/// Handles PostToolUse hook events for command execution tracking.
+/// Handles PostToolUse hook events for command execution tracking and markdown file validation.
 /// 
 /// Analyzes command execution results to track success rates and adjust
-/// confidence scores for future command suggestions.
+/// confidence scores for future command suggestions. Also detects markdown
+/// file creation/modification and validates them against documentation standards.
 /// 
 /// # Arguments
 /// * `config` - Configuration for tracking settings
 /// * `hook_input` - Hook input data containing execution results
 /// 
 /// # Returns
-/// * `Ok(())` - Processing completed (may output analytics)
+/// * `Ok(())` - Processing completed (may output analytics and validation results)
 /// * `Err` - If execution tracking fails
 fn handle_post_tool_use(_config: &Config, hook_input: &HookInput) -> Result<()> {
     let Some(tool_name) = &hook_input.tool_name else {
@@ -161,11 +186,18 @@ fn handle_post_tool_use(_config: &Config, hook_input: &HookInput) -> Result<()> 
         return Ok(());
     };
 
-    // Only track Bash command executions
-    if tool_name != "Bash" {
-        return Ok(());
+    // Handle different tool types
+    match tool_name.as_str() {
+        "Bash" => handle_bash_post_tool_use(hook_input, tool_response)?,
+        "Write" | "Edit" | "MultiEdit" => handle_file_operation_post_tool_use(hook_input)?,
+        _ => {}
     }
 
+    Ok(())
+}
+
+/// Handles PostToolUse for Bash commands
+fn handle_bash_post_tool_use(hook_input: &HookInput, tool_response: &crate::types::ToolResponse) -> Result<()> {
     // Log execution results for future analytics
     let exit_code = tool_response.exit_code.unwrap_or(-1);
     let success = exit_code == 0;
@@ -173,9 +205,29 @@ fn handle_post_tool_use(_config: &Config, hook_input: &HookInput) -> Result<()> 
     if let Some(tool_input) = &hook_input.tool_input {
         if let Some(command) = &tool_input.command {
             println!("Command execution tracked: {command} (exit_code: {exit_code}, success: {success})");
+            
+            // Check if the command involved markdown files
+            if success && detect_markdown_file_operations(command) {
+                validate_markdown_files_in_command(command)?;
+            }
         }
     }
+    
+    Ok(())
+}
 
+/// Handles PostToolUse for file operations (Write, Edit, MultiEdit)
+fn handle_file_operation_post_tool_use(hook_input: &HookInput) -> Result<()> {
+    if let Some(tool_input) = &hook_input.tool_input {
+        // Check if a file_path was provided and it's a markdown file
+        if let Some(file_path) = tool_input.command.as_ref() 
+            .or(tool_input.file_path.as_ref()) {
+            if file_path.ends_with(".md") && Path::new(file_path).exists() {
+                validate_markdown_file(file_path)?;
+            }
+        }
+    }
+    
     Ok(())
 }
 
@@ -191,6 +243,124 @@ fn get_cached_regex(pattern: &str) -> Result<Regex> {
     let regex = Regex::new(pattern)?;
     cache.insert(pattern.to_string(), regex.clone());
     Ok(regex)
+}
+
+/// Detects documentation-related keywords in user prompts.
+/// 
+/// Scans the prompt for common documentation keywords and phrases
+/// that indicate the user intends to create or modify documentation.
+/// 
+/// # Arguments
+/// * `prompt` - The user prompt to analyze
+/// 
+/// # Returns
+/// * `true` - If documentation keywords are detected
+/// * `false` - If no documentation keywords are found
+fn detect_documentation_keywords(prompt: &str) -> bool {
+    let doc_keywords = [
+        "write documentation",
+        "create documentation", 
+        "write guide",
+        "create guide",
+        "write readme",
+        "create readme",
+        "document",
+        "documentation",
+        "guide",
+        "manual",
+        "instructions",
+        "how to",
+        "tutorial",
+        ".md file",
+        "markdown file",
+        "write a guide",
+        "create a guide",
+        "add documentation",
+        "update documentation",
+    ];
+    
+    let prompt_lower = prompt.to_lowercase();
+    doc_keywords.iter().any(|keyword| prompt_lower.contains(keyword))
+}
+
+/// Detects if a bash command involves markdown file operations.
+/// 
+/// Scans the command for common file operations on .md files.
+/// 
+/// # Arguments
+/// * `command` - The bash command to analyze
+/// 
+/// # Returns
+/// * `true` - If markdown file operations are detected
+/// * `false` - If no markdown file operations are found
+fn detect_markdown_file_operations(command: &str) -> bool {
+    // Check if command contains .md file references
+    command.contains(".md") && (
+        command.contains("touch") ||
+        command.contains("echo") ||
+        command.contains("cat") ||
+        command.contains("cp") ||
+        command.contains("mv") ||
+        command.contains(">") ||
+        command.contains(">>")
+    )
+}
+
+/// Validates markdown files mentioned in a bash command.
+/// 
+/// Extracts potential .md file paths from the command and validates them.
+/// 
+/// # Arguments
+/// * `command` - The bash command containing markdown file operations
+/// 
+/// # Returns
+/// * `Ok(())` - Validation completed
+/// * `Err` - If validation fails
+fn validate_markdown_files_in_command(command: &str) -> Result<()> {
+    // Simple extraction of .md file paths from command
+    let words: Vec<&str> = command.split_whitespace().collect();
+    
+    for word in words {
+        if word.ends_with(".md") {
+            // Remove common shell characters
+            let file_path = word.trim_matches(|c| matches!(c, '"' | '\'' | '>' | '<'));
+            if Path::new(file_path).exists() {
+                validate_markdown_file(file_path)?;
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Validates a single markdown file against documentation standards.
+/// 
+/// Uses claude-doc-advisor to validate the file and outputs results.
+/// 
+/// # Arguments
+/// * `file_path` - Path to the markdown file to validate
+/// 
+/// # Returns
+/// * `Ok(())` - Validation completed
+/// * `Err` - If validation fails
+fn validate_markdown_file(file_path: &str) -> Result<()> {
+    match validate_document_compliance(file_path) {
+        Ok(result) => {
+            if result.is_compliant {
+                println!("✓ Markdown file '{file_path}' is compliant with documentation standards");
+            } else {
+                println!("⚠ Markdown file '{file_path}' has compliance issues:");
+                for issue in result.issues {
+                    println!("  - {issue}");
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Warning: Could not validate markdown file '{file_path}': {e}");
+        }
+    }
+    
+    Ok(())
 }
 
 /// Checks if a command matches any configured mappings and generates suggestions.

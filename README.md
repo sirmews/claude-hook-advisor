@@ -1,6 +1,6 @@
 # Claude Hook Advisor
 
-A Rust CLI tool that integrates with Claude Code using a **triple-hook architecture** to provide intelligent command suggestions and semantic directory aliasing. Enhance your development workflow with automatic command mapping and natural language directory references.
+A Rust CLI tool that integrates with Claude Code using a **triple-hook architecture** to provide intelligent command suggestions, semantic directory aliasing, and automatic documentation standards enforcement. Enhance your development workflow with automatic command mapping, natural language directory references, and real-time documentation validation.
 
 ## 🎬 What You'll Experience
 
@@ -25,11 +25,23 @@ Behind the scenes, you'll see:
 
 **You see:** Claude seamlessly uses your preferred tools without you having to correct it every time.
 
+### Documentation Standards Enforcement ✅
+**You type:** *"Help me create documentation for the API"*
+**Hook responds:** *Automatically displays documentation standards including required YAML frontmatter, date formats, and tag conventions*
+
+**Claude creates:** `api-guide.md` with minimal content
+**Hook validates:** *Automatically checks compliance and shows detailed issues*
+```
+⚠ Markdown file 'api-guide.md' has compliance issues:
+  - error (missing frontmatter): Document is missing YAML frontmatter. Add frontmatter with required fields.
+```
+
 ### The Magic is Invisible
 - No extra commands to remember
 - No interruptions to your workflow  
 - Natural language directory references just work
 - Your preferred tools are used automatically
+- Documentation standards are enforced automatically
 - All happens transparently in Claude Code conversations
 
 ## Features
@@ -45,10 +57,16 @@ Behind the scenes, you'll see:
 - **Automatic resolution**: Claude Code automatically resolves semantic references to canonical paths
 - **TOML configuration**: Simple configuration file-based setup
 
+### 📝 Documentation Standards Enforcement
+- **Automatic guidance**: Shows documentation standards when you mention documentation keywords
+- **Real-time validation**: Validates markdown files after creation/modification via any tool (Write, Edit, Bash)
+- **Comprehensive checks**: YAML frontmatter, required fields, date formats, tag conventions, filename rules
+- **Detailed feedback**: Shows specific compliance issues with suggestions for fixes
+
 ### 🚀 Performance & Security
-- **Fast and lightweight**: Built in Rust for optimal performance
+- **Fast and lightweight**: Built in Rust for optimal performance (<21ms hook execution)
 - **Path canonicalization**: Security against directory traversal attacks
-- **Graceful error handling**: Robust fallback mechanisms
+- **Graceful error handling**: Robust fallback mechanisms that never break hooks
 
 ## Installation
 
@@ -152,8 +170,8 @@ claude-hook-advisor --install-hooks
 
 This automatically configures all three hooks:
 - **PreToolUse**: Command suggestion and blocking
-- **UserPromptSubmit**: Directory reference detection  
-- **PostToolUse**: Analytics and execution tracking
+- **UserPromptSubmit**: Directory reference detection and documentation standards guidance
+- **PostToolUse**: Analytics, execution tracking, and markdown file validation
 
 ### Manual Configuration
 
@@ -235,6 +253,46 @@ let canonical = fs::canonicalize(&resolved)?;
 
 ---
 
+### Documentation Standards Enforcement (UserPromptSubmit & PostToolUse Hooks) 📝
+
+**UserPromptSubmit Flow - Proactive Guidance:**
+1. **Keyword Detection**: Scans user prompts for documentation-related keywords ("write documentation", "create guide", "readme", etc.)
+2. **Standards Retrieval**: Loads documentation standards based on established conventions
+3. **Guidance Display**: Shows required YAML frontmatter, date formats, tag rules, and filename conventions
+
+**PostToolUse Flow - Automatic Validation:**
+1. **File Detection**: Monitors tool outputs for markdown file creation/modification (Write, Edit, Bash tools)
+2. **Standards Validation**: Validates files against comprehensive documentation standards
+3. **Compliance Reporting**: Provides detailed feedback on issues and suggestions
+
+**Behind the Scenes:**
+```rust
+// Documentation keyword detection
+let doc_keywords = ["write documentation", "create guide", "document", "readme", "manual"];
+if doc_keywords.iter().any(|keyword| prompt_lower.contains(keyword)) {
+    let standards = get_documentation_standards()?;
+    println!("{}", standards.guidance_text);
+}
+
+// Markdown file validation
+if file_path.ends_with(".md") && Path::new(file_path).exists() {
+    let result = validate_document_compliance(file_path)?;
+    if !result.is_compliant {
+        for issue in result.issues {
+            println!("  - {issue}");
+        }
+    }
+}
+```
+
+**What gets validated:**
+- **YAML Frontmatter**: Required fields (title, created_at, updated_at, tags, description)
+- **Date Formats**: YYYY-MM-DD validation with chrono
+- **Tag Conventions**: Must start with # and use kebab-case (#project-name, #guide)
+- **Filename Rules**: Suggests kebab-case.md naming conventions
+
+---
+
 ### Analytics (PostToolUse Hook) 📊
 
 **The Flow:**
@@ -251,8 +309,9 @@ match hook_data.tool_response.exit_code {
 }
 ```
 
-**Future possibilities:**
+**Enhanced capabilities:**
 - Command success rate analytics
+- Documentation compliance tracking
 - Performance optimization suggestions
 - Usage pattern insights
 
@@ -298,6 +357,39 @@ Here's what an actual conversation looks like with claude-hook-advisor working:
 *(Claude runs: `bun install`)*
 
 **Result:** Your preferred package manager is used automatically, no manual correction needed!
+
+---
+
+**🗣️ You:** "I need to write documentation for the new API"
+
+**🤖 Claude:** "I'll help you create documentation for the new API."
+
+**Hook provides guidance:**
+```
+Documentation standards detected:
+  Required frontmatter fields: ["title", "created_at", "updated_at", "tags", "description"]
+  Date format: YYYY-MM-DD
+  Tag rules: require_hash_prefix=true, prefer_kebab_case=true
+  Filename conventions: kebab-case with .md
+
+Documentation Standards:
+• Required YAML frontmatter: title, created_at, updated_at, tags, description
+• Date format: YYYY-MM-DD (example: 2025-08-25)
+• Tags must start with # and use kebab-case (#project-name, #guide)
+• Filenames should use kebab-case.md
+• Include Purpose and Content Structure sections
+• Keep documents focused and concise
+```
+
+**Later, Claude creates:** `api-guide.md` with basic content
+
+**Hook automatically validates:**
+```
+⚠ Markdown file 'api-guide.md' has compliance issues:
+  - error (missing frontmatter): Document is missing YAML frontmatter. Add frontmatter with required fields.
+```
+
+**Result:** You get proactive guidance before creating docs, and automatic validation after!
 
 ---
 
@@ -361,6 +453,12 @@ echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check 
 # Manual testing - Analytics (PostToolUse)
 echo '{"session_id":"test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"bun install"},"tool_response":{"exit_code":0}}' | ./target/debug/claude-hook-advisor --hook
 
+# Manual testing - Documentation guidance (UserPromptSubmit)
+echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"create documentation for the API"}' | ./target/debug/claude-hook-advisor --hook
+
+# Manual testing - Markdown validation (PostToolUse)
+echo '{"session_id":"test","hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"test.md"},"tool_response":{"exit_code":0}}' | ./target/debug/claude-hook-advisor --hook
+
 # Test directory resolution with existing config
 echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check the docs directory"}' | ./target/debug/claude-hook-advisor --hook
 ```
@@ -379,6 +477,24 @@ When claude-hook-advisor is working correctly, you'll see these messages in Clau
 **Command Suggestions:**
 ```
 <pre-tool-use-hook>Command 'npm' mapped to 'bun'. Suggested: bun install</pre-tool-use-hook>
+```
+
+**Documentation Guidance:**
+```
+Documentation standards detected:
+  Required frontmatter fields: ["title", "created_at", "updated_at", "tags", "description"]
+  Date format: YYYY-MM-DD
+  [additional guidance text...]
+```
+
+**Markdown Validation:**
+```
+✓ Markdown file 'api-guide.md' is compliant with documentation standards
+```
+or
+```
+⚠ Markdown file 'readme.md' has compliance issues:
+  - error (missing frontmatter): Document is missing YAML frontmatter. Add frontmatter with required fields.
 ```
 
 **Execution Tracking:**
@@ -508,6 +624,13 @@ The tool looks for configuration files in this order:
 - **Cross-Platform Paths**: Abstract away platform-specific directory structures
 - **Team Collaboration**: Shared semantic directory references across team members
 - **Workflow Automation**: Natural language directory references in Claude conversations
+
+### Documentation Standards Enforcement
+- **Consistent Documentation**: Automatic enforcement of YAML frontmatter, date formats, and tag conventions
+- **Proactive Guidance**: Get documentation standards before you start writing
+- **Quality Assurance**: Real-time validation catches formatting issues immediately
+- **Team Standards**: Ensure all team members follow the same documentation conventions
+- **Workflow Integration**: Works seamlessly with any tool that creates/modifies markdown files
 
 ## Similar Tools
 
