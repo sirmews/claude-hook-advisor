@@ -1,0 +1,42 @@
+We're implementing claude-doc-advisor as a focused library crate for documentation standards enforcement.
+
+CONTEXT:
+- This is a companion library to claude-hook-advisor (existing project in this directory)
+- Purpose: Enforce documentation consistency by providing standards guidance before document creation and validating compliance afterward
+- NOT a document generator - just standards enforcement
+- Must fail silently with logged errors to maintain hook resilience
+
+CORE API CONTRACT (only 2 functions):
+1. get_documentation_standards() -> Result<DocumentationStandards, ValidationError>
+2. validate_document_compliance<P: AsRef<Path>>(path: P) -> Result<ComplianceResult, ValidationError>
+
+INTEGRATION POINTS:
+- UserPromptSubmit hook: Detect documentation intent → provide standards guidance
+- PostToolUse hook: Detect .md file creation/modification → validate compliance
+- Uses existing claude-hook-advisor.toml config (no separate config needed)
+
+KEY REQUIREMENTS:
+- Pure library crate (no CLI, no binary)
+- Test-driven development with 95%+ coverage
+- Based on standards from ~/Documents/Documentation/TEMPLATE.md
+- Performance suitable for hook context (<100ms operations)
+- All validation failures should be graceful and logged
+
+IMPLEMENTATION PLAN:
+Phase 1: Create crate structure, core data structures, failing tests
+Phase 2: Implement YAML frontmatter parsing and validation logic  
+Phase 3: Integration preparation and performance testing
+Phase 4: claude-hook-advisor integration
+
+START WITH:
+1. cargo new claude-doc-advisor --lib (in parent directory of claude-hook-advisor)
+2. Implement DocumentationStandards, ComplianceResult, ValidationError types
+3. Write failing tests for both API functions
+4. Implement get_documentation_standards() with hardcoded standards
+
+REFERENCE FILES:
+- /Users/nav/Projects/crates/claude-hook-advisor/docs/claude-doc-advisor-implementation-plan.md (complete plan)
+- /Users/nav/Documents/Documentation/TEMPLATE.md (documentation standards to enforce)
+- /Users/nav/Projects/crates/claude-hook-advisor/src/hooks.rs (integration reference)
+
+TDD APPROACH: Write failing test → minimal implementation → refactor → repeat
