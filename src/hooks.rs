@@ -82,6 +82,21 @@ fn handle_pre_tool_use(config: &Config, hook_input: &HookInput, replace_mode: bo
         return Ok(());
     };
 
+    // Check for hashtag search commands
+    if config.features.hashtag_search_advisory {
+        if let Some(search_terms) = command.strip_prefix("hashtag search ") {
+            let guidance = generate_hashtag_search_guidance(search_terms)?;
+            let output = HookOutput {
+                decision: "block".to_string(),
+                reason: guidance,
+                replacement_command: None,
+            };
+            
+            println!("{}", serde_json::to_string(&output)?);
+            std::process::exit(0);
+        }
+    }
+
     // Check for command mappings
     if let Some((suggestion, replacement_cmd)) = check_command_mappings(config, command)? {
         let output = if replace_mode {
@@ -363,6 +378,36 @@ fn validate_markdown_file(file_path: &str) -> Result<()> {
     Ok(())
 }
 
+/// Generates ripgrep pattern guidance for hashtag search commands.
+/// 
+/// Takes search terms and converts them into hashtag patterns suitable for ripgrep.
+/// Returns guidance text with the suggested command format.
+/// 
+/// # Arguments
+/// * `search_terms` - Space-separated search terms from "hashtag search" command
+/// 
+/// # Returns
+/// * `Ok(String)` - Guidance text with ripgrep command pattern
+/// * `Err` - If processing fails
+fn generate_hashtag_search_guidance(search_terms: &str) -> Result<String> {
+    let terms: Vec<&str> = search_terms.split_whitespace().collect();
+    
+    if terms.is_empty() {
+        return Ok("For hashtag search, use ripgrep with patterns like: rg '#tag1|#tag2' [directories] --glob='*.md' --glob='*.txt' -n -C 2".to_string());
+    }
+    
+    // Build hashtag pattern: "auth async" -> "#auth|#async"
+    let hashtag_pattern = terms
+        .iter()
+        .map(|term| format!("#{term}"))
+        .collect::<Vec<_>>()
+        .join("|");
+    
+    Ok(format!(
+        "For hashtag search, use ripgrep with patterns like: rg '{hashtag_pattern}' [directories] --glob='*.md' --glob='*.txt' -n -C 2"
+    ))
+}
+
 /// Checks if a command matches any configured mappings and generates suggestions.
 /// 
 /// Uses word-boundary regex matching to ensure exact command matches (e.g., "npm"
@@ -411,6 +456,7 @@ mod tests {
         let config = Config { 
             commands,
             semantic_directories: HashMap::new(),
+            features: Default::default(),
         };
 
         // Test npm mapping
@@ -435,6 +481,7 @@ mod tests {
         let config = Config { 
             commands,
             semantic_directories: HashMap::new(),
+            features: Default::default(),
         };
 
         // Test word boundaries - "npm" in "my-npm-tool" should NOT match due to word boundaries
@@ -456,6 +503,39 @@ mod tests {
         assert!(result.is_some());
         let (_, replacement) = result.unwrap();
         assert_eq!(replacement, "bun   install   --verbose");
+    }
+
+    #[test]
+    fn test_hashtag_search_guidance() {
+        // Test basic hashtag search
+        let guidance = generate_hashtag_search_guidance("rust async").unwrap();
+        assert!(guidance.contains("#rust|#async"));
+        assert!(guidance.contains("rg"));
+        assert!(guidance.contains("--glob='*.md'"));
+        
+        // Test empty search terms
+        let guidance = generate_hashtag_search_guidance("").unwrap();
+        assert!(guidance.contains("#tag1|#tag2"));
+        
+        // Test single term
+        let guidance = generate_hashtag_search_guidance("authentication").unwrap();
+        assert!(guidance.contains("#authentication"));
+    }
+
+    #[test]
+    fn test_hashtag_search_feature_disabled() {
+        // Test that hashtag search is skipped when feature is disabled
+        let mut features = crate::types::FeatureFlags::default();
+        features.hashtag_search_advisory = false;
+        
+        let config = Config { 
+            commands: HashMap::new(),
+            semantic_directories: HashMap::new(),
+            features,
+        };
+
+        // With the feature disabled, hashtag search commands should not be processed
+        assert!(!config.features.hashtag_search_advisory);
     }
 
     #[test]

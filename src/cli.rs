@@ -192,6 +192,7 @@ fn create_smart_config(config_path: &str) -> Result<()> {
     let config = Config {
         commands,
         semantic_directories: std::collections::HashMap::new(), // Empty - will be comments only
+        features: Default::default(),
     };
     
     // Generate TOML content
@@ -377,6 +378,13 @@ fn ensure_config_sections(config_path: &str) -> Result<()> {
         println!("✅ Added [semantic_directories] section with default aliases");
     }
     
+    if !config_content.contains("[features]") {
+        config_content.push_str("# Feature flags - enable/disable specific functionality\n");
+        config_content.push_str("[features]\n");
+        config_content.push_str("hashtag_search_advisory = true    # Enable hashtag search pattern guidance\n\n");
+        needs_update = true;
+        println!("✅ Added [features] section with hashtag search enabled");
+    }
     
     if needs_update {
         fs::write(config_path, config_content)
@@ -555,6 +563,55 @@ mod tests {
         });
     }
     
+    #[test]
+    fn test_ensure_config_sections() {
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("test-config.toml");
+        
+        // Create a minimal config file missing features section
+        fs::write(&config_path, r#"[commands]
+npm = "bun"
+
+[semantic_directories]
+docs = "~/Documents/Documentation"
+"#).unwrap();
+        
+        // Run ensure_config_sections
+        ensure_config_sections(config_path.to_str().unwrap()).unwrap();
+        
+        // Check that features section was added
+        let content = fs::read_to_string(&config_path).unwrap();
+        assert!(content.contains("[features]"));
+        assert!(content.contains("hashtag_search_advisory = true"));
+        assert!(content.contains("# Enable hashtag search pattern guidance"));
+    }
+
+    #[test]
+    fn test_ensure_config_sections_no_update_needed() {
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("test-config.toml");
+        
+        // Create a complete config file
+        fs::write(&config_path, r#"[commands]
+npm = "bun"
+
+[semantic_directories]
+docs = "~/Documents/Documentation"
+
+[features]
+hashtag_search_advisory = true
+"#).unwrap();
+        
+        let original_content = fs::read_to_string(&config_path).unwrap();
+        
+        // Run ensure_config_sections
+        ensure_config_sections(config_path.to_str().unwrap()).unwrap();
+        
+        // Check that content is unchanged
+        let updated_content = fs::read_to_string(&config_path).unwrap();
+        assert_eq!(original_content, updated_content);
+    }
+
     #[test] 
     fn test_create_example_config() {
         let temp_dir = tempdir().unwrap();
@@ -567,6 +624,7 @@ mod tests {
         // Check that all required sections are present
         assert!(content.contains("[commands]"));
         assert!(content.contains("[semantic_directories]"));
+        assert!(content.contains("[features]"));
         
         // Check that default aliases are present
         assert!(content.contains("docs = \"~/Documents/Documentation\""));
@@ -609,6 +667,9 @@ npm = "bun"
 
 [semantic_directories]
 docs = "~/Documents"
+
+[features]
+hashtag_search_advisory = true
 "#;
         fs::write(&config_path, existing_config).unwrap();
         

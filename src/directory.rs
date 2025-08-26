@@ -129,6 +129,7 @@ mod tests {
         Config {
             commands: HashMap::new(),
             semantic_directories,
+            features: Default::default(),
         }
     }
 

@@ -42,6 +42,9 @@ directory_resolution = true        # UserPromptSubmit directory aliases
 documentation_guidance = true      # UserPromptSubmit doc keyword detection
 documentation_validation = true   # PostToolUse markdown validation
 
+# Search features
+hashtag_search_advisory = true    # PreToolUse hashtag search pattern guidance
+
 # Analytics features
 execution_tracking = false        # PostToolUse command analytics
 verbose_logging = false           # Detailed stderr output
@@ -92,6 +95,9 @@ pub struct FeatureFlags {
     #[serde(default = "default_true")]
     pub documentation_validation: bool,
     
+    #[serde(default = "default_true")]
+    pub hashtag_search_advisory: bool,
+    
     #[serde(default = "default_false")]
     pub execution_tracking: bool,
     
@@ -127,11 +133,21 @@ pub fn handle_user_prompt_submit(input: &HookInput, config: &Config) -> Result<(
 }
 
 pub fn handle_pre_tool_use(input: &HookInput, config: &Config) -> Result<()> {
-    if !config.features.command_suggestions {
-        return Ok(()); // Pass through without suggestions
+    // Command suggestions
+    if config.features.command_suggestions {
+        // Existing command suggestion logic...
     }
     
-    // Existing command suggestion logic...
+    // Hashtag search advisory
+    if config.features.hashtag_search_advisory {
+        if let Some(command) = &input.tool_input.command {
+            if let Some(search_terms) = command.strip_prefix("hashtag search ") {
+                // Provide ripgrep pattern guidance
+                return provide_hashtag_search_guidance(search_terms);
+            }
+        }
+    }
+    
     Ok(())
 }
 
@@ -179,6 +195,7 @@ execution_tracking = false
 [features]
 command_suggestions = false
 directory_resolution = true
+hashtag_search_advisory = true
 documentation_guidance = true
 documentation_validation = true
 execution_tracking = false
@@ -189,6 +206,7 @@ execution_tracking = false
 [features]
 command_suggestions = true
 directory_resolution = true
+hashtag_search_advisory = true
 documentation_guidance = true
 documentation_validation = true
 execution_tracking = true

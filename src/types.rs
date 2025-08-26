@@ -13,7 +13,28 @@ pub struct Config {
     pub commands: HashMap<String, String>,
     #[serde(default)]
     pub semantic_directories: HashMap<String, String>,
+    #[serde(default)]
+    pub features: FeatureFlags,
 }
+
+/// Feature flags for enabling/disabling specific functionality.
+/// 
+/// Controls which features are active in the hook system.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct FeatureFlags {
+    #[serde(default = "default_true")]
+    pub hashtag_search_advisory: bool,
+}
+
+impl Default for FeatureFlags {
+    fn default() -> Self {
+        Self {
+            hashtag_search_advisory: true,
+        }
+    }
+}
+
+fn default_true() -> bool { true }
 
 /// Input data received from Claude Code hook system.
 /// 
@@ -167,5 +188,48 @@ mod tests {
         assert_eq!(input.hook_event_name, "PostToolUse");
         assert_eq!(input.tool_name.unwrap(), "Bash");
         assert_eq!(input.tool_response.unwrap().exit_code.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_config_with_features() {
+        // Test Config deserialization with features section
+        let toml = r#"
+            [commands]
+            npm = "bun"
+
+            [semantic_directories]
+            docs = "~/Documents/Documentation"
+
+            [features]
+            hashtag_search_advisory = false
+        "#;
+        
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.commands.get("npm"), Some(&"bun".to_string()));
+        assert_eq!(config.semantic_directories.get("docs"), Some(&"~/Documents/Documentation".to_string()));
+        assert_eq!(config.features.hashtag_search_advisory, false);
+    }
+
+    #[test]
+    fn test_config_without_features() {
+        // Test Config deserialization without features section (should use defaults)
+        let toml = r#"
+            [commands]
+            npm = "bun"
+
+            [semantic_directories]
+            docs = "~/Documents/Documentation"
+        "#;
+        
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.commands.get("npm"), Some(&"bun".to_string()));
+        assert_eq!(config.semantic_directories.get("docs"), Some(&"~/Documents/Documentation".to_string()));
+        assert_eq!(config.features.hashtag_search_advisory, true); // Default value
+    }
+
+    #[test]
+    fn test_feature_flags_default() {
+        let features = FeatureFlags::default();
+        assert_eq!(features.hashtag_search_advisory, true);
     }
 }
