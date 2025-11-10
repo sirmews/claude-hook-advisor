@@ -17,3 +17,4 @@ mod config;
 mod hooks;
 mod installer;
 mod directory;
+pub mod history;

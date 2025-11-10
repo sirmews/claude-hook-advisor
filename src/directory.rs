@@ -131,10 +131,11 @@ mod tests {
         let mut semantic_directories = HashMap::new();
         semantic_directories.insert("docs".to_string(), "~/Documents/Documentation".to_string());
         semantic_directories.insert("project_docs".to_string(), "~/Documents/Documentation/project".to_string());
-        
+
         Config {
             commands: HashMap::new(),
             semantic_directories,
+            command_history: None,
         }
     }
 

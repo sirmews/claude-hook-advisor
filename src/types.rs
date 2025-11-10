@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Configuration structure for command mappings and directory aliasing.
-/// 
+///
 /// Loaded from .claude-hook-advisor.toml files, this struct contains
 /// the mapping from original commands to their preferred replacements
 /// and semantic directory aliases for natural language references.
@@ -13,6 +13,25 @@ pub struct Config {
     pub commands: HashMap<String, String>,
     #[serde(default)]
     pub semantic_directories: HashMap<String, String>,
+    #[serde(default)]
+    pub command_history: Option<CommandHistoryConfig>,
+}
+
+/// Configuration for command history tracking
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct CommandHistoryConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_history_path")]
+    pub log_file: String,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_history_path() -> String {
+    "~/.claude-hook-advisor/bash-history.db".to_string()
 }
 
 /// Input data received from Claude Code hook system.
