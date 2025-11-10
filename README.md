@@ -124,6 +124,19 @@ curl = "wget --verbose"
 "claude docs" = "~/Documents/Documentation/claude"
 ```
 
+### 4. (Optional) Enable Command History Tracking
+Track all commands Claude runs to a SQLite database:
+
+```toml
+[command_history]
+enabled = true
+log_file = "~/.claude-hook-advisor/bash-history.db"
+```
+
+Then view history anytime with: `claude-hook-advisor --history`
+
+See the [Command History Tracking](#command-history-tracking) section for full details.
+
 ### Example Configurations
 
 **Node.js project (prefer bun):**
@@ -268,15 +281,36 @@ match hook_data.tool_response.exit_code {
 
 Track every Bash command Claude runs in a SQLite database. Commands executed by Claude don't show up in your shell's history, but now you can retrieve them anytime.
 
-### Configuration
+### Setup
 
-Add to your `.claude-hook-advisor.toml`:
+**1. Install/Update the binary:**
+
+If you just cloned or pulled the latest code:
+```bash
+cargo install --path .
+```
+
+If you installed from crates.io, the feature is already available in v0.2.0+.
+
+**2. Enable command history:**
+
+Edit your `.claude-hook-advisor.toml` and add:
 
 ```toml
 [command_history]
 enabled = true
 log_file = "~/.claude-hook-advisor/bash-history.db"
 ```
+
+**Or** if you don't have a config file yet, run:
+```bash
+claude-hook-advisor --install
+```
+This creates a config file with command history as a commented example you can uncomment.
+
+**3. That's it!**
+
+The PostToolUse hook (already installed if you ran `--install` before) will automatically start logging commands. No restart needed!
 
 ### Viewing History
 
