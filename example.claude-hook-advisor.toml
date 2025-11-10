@@ -1,5 +1,18 @@
 # Claude Hook Advisor Configuration Example
 # This file shows various command mapping examples for different use cases
+#
+# ===== IMPORTANT: How Command Matching Works =====
+# Commands are matched ONLY at the start of the line (primary command position).
+# This ensures mappings apply to the main command, not subcommands or arguments.
+#
+# Examples:
+#   ✅ "npm install"    → matches "npm" → becomes "bun install"
+#   ✅ "npm start"      → matches "npm" → becomes "bun start"
+#   ❌ "npx npm"        → does NOT match "npm" (not primary command)
+#   ❌ "npm-check"      → does NOT match "npm" (different command)
+#   ❌ "git rm file"    → does NOT match "rm" (rm is a subcommand)
+#
+# This prevents unintended replacements and keeps your command mappings predictable.
 
 [commands]
 # ===== Node.js / JavaScript Development =====
@@ -58,6 +71,7 @@ netstat = "ss"                # Modern socket statistics
 
 # ===== File Operations =====
 # Safer file operations
+# NOTE: "rm" mapping only affects direct "rm" commands, not "git rm" or other subcommands
 rm = "trash"                  # Move to trash instead of permanent delete
 cp = "cp -i"                  # Interactive copy (ask before overwrite)
 mv = "mv -i"                  # Interactive move (ask before overwrite)

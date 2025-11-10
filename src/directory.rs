@@ -58,22 +58,28 @@ pub fn resolve_directory(config: &Config, alias: &str) -> Result<DirectoryResolu
 }
 
 /// Detects directory references in natural language text.
-/// 
+///
 /// Scans user prompts for potential directory references and attempts
 /// to resolve them using configured semantic directory mappings.
-/// 
+/// Uses whitespace-boundary matching to ensure aliases are standalone tokens,
+/// not substrings within larger words.
+///
 /// # Arguments
 /// * `config` - Configuration containing directory mappings
 /// * `text` - The user prompt text to analyze
-/// 
+///
 /// # Returns
 /// * `Vec<DirectoryResolution>` - All resolved directory references found
 pub fn detect_directory_references(config: &Config, text: &str) -> Vec<DirectoryResolution> {
     let mut results = Vec::new();
-    
-    // Try exact alias matches first
+
+    // Try exact alias matches using whitespace boundaries
     for alias in config.semantic_directories.keys() {
-        let alias_pattern = format!(r"\b{}\b", regex::escape(alias));
+        // Use capturing groups for whitespace boundaries
+        // Group 1: (^|\s) = start of string or whitespace
+        // Group 2: the alias pattern
+        // Group 3: (\s|$) = whitespace or end of string
+        let alias_pattern = format!(r"(^|\s)({})(\s|$)", regex::escape(alias));
         if let Ok(regex) = get_cached_regex(&alias_pattern) {
             if regex.is_match(text) {
                 if let Ok(resolution) = resolve_directory(config, alias) {
@@ -82,11 +88,11 @@ pub fn detect_directory_references(config: &Config, text: &str) -> Vec<Directory
             }
         }
     }
-    
+
     // Remove duplicates (same canonical path)
     results.sort_by(|a, b| a.canonical_path.cmp(&b.canonical_path));
     results.dedup_by(|a, b| a.canonical_path == b.canonical_path);
-    
+
     results
 }
 
