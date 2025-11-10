@@ -194,28 +194,35 @@ fn get_cached_regex(pattern: &str) -> Result<Regex> {
 }
 
 /// Checks if a command matches any configured mappings and generates suggestions.
-/// 
-/// Uses word-boundary regex matching to ensure exact command matches (e.g., "npm"
-/// matches "npm install" but not "npm-check"). Returns the first matching pattern.
-/// Uses cached regex compilation for better performance.
-/// 
+///
+/// Uses whitespace-boundary regex matching to ensure exact command matches (e.g., "npm"
+/// matches "npm install" but NOT "my-npm-tool"). The pattern only matches when the
+/// command is a standalone token separated by whitespace or at string boundaries.
+/// Returns the first matching pattern. Uses cached regex compilation for better performance.
+///
 /// # Arguments
 /// * `config` - Configuration containing command mappings
 /// * `command` - The bash command to check against mappings
-/// 
+///
 /// # Returns
 /// * `Ok(Some((suggestion, replacement)))` - If a mapping is found
 /// * `Ok(None)` - If no mappings match the command
 /// * `Err` - If regex compilation fails
 pub fn check_command_mappings(config: &Config, command: &str) -> Result<Option<(String, String)>> {
     for (pattern, replacement) in &config.commands {
-        // Create regex pattern to match the command at word boundaries
-        let regex_pattern = format!(r"\b{}\b", regex::escape(pattern));
+        // Create regex pattern with whitespace boundaries using capturing groups
+        // Group 1: (^|\s) = start of string or whitespace
+        // Group 2: the pattern to match
+        // Group 3: (\s|$) = whitespace or end of string
+        // This ensures the pattern only matches standalone tokens, not substrings
+        let regex_pattern = format!(r"(^|\s)({})(\s|$)", regex::escape(pattern));
         let regex = get_cached_regex(&regex_pattern)?;
 
         if regex.is_match(command) {
-            // Generate suggested replacement
-            let suggested_command = regex.replace_all(command, replacement);
+            // Generate suggested replacement, preserving whitespace boundaries
+            let suggested_command = regex.replace_all(command, |caps: &regex::Captures| {
+                format!("{}{}{}", &caps[1], replacement, &caps[3])
+            });
             let suggestion = format!(
                 "Command '{pattern}' is mapped to use '{replacement}' instead. Try: {suggested_command}"
             );
@@ -262,30 +269,73 @@ mod tests {
     fn test_command_mapping_edge_cases() {
         let mut commands = HashMap::new();
         commands.insert("npm".to_string(), "bun".to_string());
-        let config = Config { 
+        let config = Config {
             commands,
             semantic_directories: HashMap::new(),
         };
 
-        // Test word boundaries - "npm" in "my-npm-tool" should NOT match due to word boundaries
+        // Test whitespace boundaries - "npm" in "my-npm-tool" should NOT match
+        // because it's not a standalone token (no whitespace separation)
         let result = check_command_mappings(&config, "my-npm-tool install").unwrap();
-        // Looking at the regex implementation, it actually DOES match substring "npm"
-        // Let's test what the actual behavior is
-        if result.is_some() {
-            // If it matches, that's the current behavior - document it
-            let (_, replacement) = result.unwrap();
-            assert!(replacement.contains("bun"));
-        }
+        assert!(result.is_none(), "npm in 'my-npm-tool' should NOT match");
 
         // Test empty command
         let result = check_command_mappings(&config, "").unwrap();
         assert!(result.is_none());
 
-        // Test command with multiple spaces
+        // Test command with multiple spaces - should preserve spacing
         let result = check_command_mappings(&config, "npm   install   --verbose").unwrap();
         assert!(result.is_some());
         let (_, replacement) = result.unwrap();
         assert_eq!(replacement, "bun   install   --verbose");
+
+        // Test npm at end of command
+        let result = check_command_mappings(&config, "run npm").unwrap();
+        assert!(result.is_some());
+        let (_, replacement) = result.unwrap();
+        assert_eq!(replacement, "run bun");
+
+        // Test npm-like substring should NOT match
+        let result = check_command_mappings(&config, "npmc install").unwrap();
+        assert!(result.is_none(), "'npmc' should NOT match 'npm'");
+    }
+
+    #[test]
+    fn test_command_mapping_prevents_false_positives() {
+        let mut commands = HashMap::new();
+        commands.insert("RM".to_string(), "rm -i".to_string());
+        let config = Config {
+            commands,
+            semantic_directories: HashMap::new(),
+        };
+
+        // Test exact match
+        let result = check_command_mappings(&config, "RM file.txt").unwrap();
+        assert!(result.is_some());
+        let (_, replacement) = result.unwrap();
+        assert_eq!(replacement, "rm -i file.txt");
+
+        // Test should NOT match when RM is part of a larger word
+        let result = check_command_mappings(&config, "RMm file.txt").unwrap();
+        assert!(result.is_none(), "'RMm' should NOT match 'RM'");
+
+        // Test should NOT match when RM has prefix
+        let result = check_command_mappings(&config, "gitRM file.txt").unwrap();
+        assert!(result.is_none(), "'gitRM' should NOT match 'RM'");
+
+        // Test should match when RM is separated by whitespace
+        let result = check_command_mappings(&config, "git RM file.txt").unwrap();
+        assert!(result.is_some());
+        let (_, replacement) = result.unwrap();
+        assert_eq!(replacement, "git rm -i file.txt");
+
+        // Test should NOT match when RM has hyphen prefix
+        let result = check_command_mappings(&config, "git-RM file.txt").unwrap();
+        assert!(result.is_none(), "'git-RM' should NOT match 'RM'");
+
+        // Test should NOT match when RM has hyphen suffix
+        let result = check_command_mappings(&config, "RM-tool file.txt").unwrap();
+        assert!(result.is_none(), "'RM-tool' should NOT match 'RM'");
     }
 
     #[test]
