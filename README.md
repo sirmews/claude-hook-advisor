@@ -178,7 +178,7 @@ If you prefer manual setup, add to your `.claude/settings.json`:
 **The Flow:**
 1. **Command Detection**: When Claude Code tries to run a Bash command, the hook receives JSON input
 2. **Configuration Loading**: The tool loads `.claude-hook-advisor.toml` from the current directory
-3. **Pattern Matching**: Uses word-boundary regex to match commands (e.g., `npm` matches `npm install` but not `npm-check`)
+3. **Pattern Matching**: Matches only the primary command at the start of the line (e.g., `npm` matches `npm install` but not `npx npm` or `my-npm-tool`)
 4. **Suggestion Generation**: If a match is found, returns a blocking response with the suggested replacement
 5. **Claude Integration**: Claude receives the suggestion and automatically retries with the correct command
 
@@ -197,7 +197,9 @@ if let Some(replacement) = config.commands.get(&command.base_command) {
 ```
 
 **What makes it smart:**
-- Word-boundary matching prevents false positives (`npm` won't match `npm-check`)
+- Start-of-line matching ensures only primary commands are replaced (e.g., `npm install` → `bun install`, but `npx npm` is unchanged)
+- Prevents false positives with substrings (e.g., `npm` won't match `npm-check` or `my-npm-tool`)
+- Doesn't interfere with subcommands (e.g., `git rm` won't trigger an `rm` mapping)
 - Preserves command arguments (`npm install --save` → `bun install --save`)
 - Fast regex-based pattern matching (~1ms response time)
 
@@ -449,7 +451,10 @@ Enable detailed logging to see what's happening behind the scenes:
    npm = "bun"
    ```
 2. Test mapping: `echo '{"session_id":"test","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm install"}}' | claude-hook-advisor --hook`
-3. Check word boundaries: `npm-check` won't match `npm = "bun"` (by design)
+3. Remember: Commands only match at the start of the line (by design):
+   - ✅ `npm install` matches and becomes `bun install`
+   - ❌ `npx npm` won't match (npm is not the primary command)
+   - ❌ `npm-check` won't match (different command)
 4. Add debug logging to see pattern matching
 
 #### 🔒 Permission Issues
