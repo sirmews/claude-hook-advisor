@@ -45,6 +45,12 @@ Behind the scenes, you'll see:
 - **Automatic resolution**: Claude Code automatically resolves semantic references to canonical paths
 - **TOML configuration**: Simple configuration file-based setup
 
+### 📊 Command History Tracking
+- **Persistent Bash history**: All commands Claude runs are logged to SQLite database
+- **Never lose a command**: Commands run by Claude don't appear in your shell history, but now you can retrieve them
+- **Powerful querying**: Filter by session, command pattern, exit code, or time range
+- **Audit trail**: Track what Claude actually executed for debugging and compliance
+
 ### 🚀 Performance & Security
 - **Fast and lightweight**: Built in Rust for optimal performance
 - **Path canonicalization**: Security against directory traversal attacks
@@ -257,6 +263,85 @@ match hook_data.tool_response.exit_code {
 - Command success rate analytics
 - Performance optimization suggestions
 - Usage pattern insights
+
+## Command History Tracking
+
+Track every Bash command Claude runs in a SQLite database. Commands executed by Claude don't show up in your shell's history, but now you can retrieve them anytime.
+
+### Configuration
+
+Add to your `.claude-hook-advisor.toml`:
+
+```toml
+[command_history]
+enabled = true
+log_file = "~/.claude-hook-advisor/bash-history.db"
+```
+
+### Viewing History
+
+**Show recent commands:**
+```bash
+claude-hook-advisor --history
+```
+
+**Show last 50 commands:**
+```bash
+claude-hook-advisor --history --limit 50
+```
+
+**Show only failed commands:**
+```bash
+claude-hook-advisor --history --failures
+```
+
+**Show git commands only:**
+```bash
+claude-hook-advisor --history --pattern git
+```
+
+**Show commands from a specific session:**
+```bash
+claude-hook-advisor --history --session abc123
+```
+
+### What Gets Logged
+
+Each command record includes:
+- **Timestamp**: When the command was executed
+- **Command**: The exact command that ran
+- **Exit code**: Success (0) or failure code
+- **Working directory**: Where the command was executed
+- **Session ID**: Link commands to Claude Code sessions
+
+### Example Output
+
+```
+Command History (5 records)
+================================================================================
+
+2025-11-10T14:30:22Z  ✓
+  Command: git status
+  CWD:     /home/user/my-project
+  Session: abc123-def456
+
+2025-11-10T14:30:25Z  ✓
+  Command: cargo test
+  CWD:     /home/user/my-project
+  Session: abc123-def456
+
+2025-11-10T14:30:30Z  ✗ (exit: 1)
+  Command: npm test
+  CWD:     /home/user/my-project
+  Session: abc123-def456
+```
+
+### Use Cases
+
+- **Retrieve that perfect command**: "What was that complex curl command Claude ran yesterday?"
+- **Debugging failures**: "Which commands failed in this session?"
+- **Audit trail**: Track all commands for compliance or security review
+- **Learning**: See what commands Claude uses to solve problems
 
 ## Example Output
 

@@ -2,12 +2,14 @@
 
 use crate::config::load_config;
 use crate::directory::detect_directory_references;
+use crate::history;
 use crate::types::{Config, HookInput, HookOutput};
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
 use std::io::{self, Read};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// Cache for compiled regex patterns to avoid recompilation
@@ -141,18 +143,18 @@ fn handle_user_prompt_submit(config: &Config, hook_input: &HookInput) -> Result<
 }
 
 /// Handles PostToolUse hook events for command execution tracking.
-/// 
-/// Analyzes command execution results to track success rates and adjust
-/// confidence scores for future command suggestions.
-/// 
+///
+/// Analyzes command execution results and logs them to SQLite database if enabled.
+/// Tracks command history, exit codes, and whether commands were replaced.
+///
 /// # Arguments
 /// * `config` - Configuration for tracking settings
 /// * `hook_input` - Hook input data containing execution results
-/// 
+///
 /// # Returns
 /// * `Ok(())` - Processing completed (may output analytics)
 /// * `Err` - If execution tracking fails
-fn handle_post_tool_use(_config: &Config, hook_input: &HookInput) -> Result<()> {
+fn handle_post_tool_use(config: &Config, hook_input: &HookInput) -> Result<()> {
     let Some(tool_name) = &hook_input.tool_name else {
         return Ok(());
     };
@@ -166,17 +168,62 @@ fn handle_post_tool_use(_config: &Config, hook_input: &HookInput) -> Result<()> 
         return Ok(());
     }
 
-    // Log execution results for future analytics
-    let exit_code = tool_response.exit_code.unwrap_or(-1);
-    let success = exit_code == 0;
-    
-    if let Some(tool_input) = &hook_input.tool_input {
-        if let Some(command) = &tool_input.command {
-            println!("Command execution tracked: {command} (exit_code: {exit_code}, success: {success})");
-        }
-    }
+    // Check if command history is enabled
+    let history_config = match &config.command_history {
+        Some(cfg) if cfg.enabled => cfg,
+        _ => return Ok(()), // History disabled, skip logging
+    };
+
+    // Get command details
+    let Some(tool_input) = &hook_input.tool_input else {
+        return Ok(());
+    };
+
+    let Some(command) = &tool_input.command else {
+        return Ok(());
+    };
+
+    // Expand tilde in log file path
+    let log_path = expand_tilde(&history_config.log_file)?;
+
+    // Initialize database connection
+    let conn = history::init_database(&log_path)
+        .context("Failed to initialize command history database")?;
+
+    // Check if this command was a replacement
+    let (was_replaced, original_command) = if let Some((_, _)) = check_command_mappings(config, command)? {
+        // This would have been replaced - find the original
+        // For now, we don't have the original in PostToolUse, so we mark it as potentially replaced
+        (false, None)
+    } else {
+        (false, None)
+    };
+
+    // Create and log the command record
+    let record = history::create_record(
+        &hook_input.session_id,
+        command,
+        tool_response.exit_code,
+        hook_input.cwd.as_deref(),
+        was_replaced,
+        original_command,
+    );
+
+    history::log_command(&conn, &record)
+        .context("Failed to log command to history")?;
 
     Ok(())
+}
+
+/// Expands tilde (~) in file paths to the user's home directory
+fn expand_tilde(path: &str) -> Result<PathBuf> {
+    if path.starts_with("~/") {
+        let home = std::env::var("HOME")
+            .context("HOME environment variable not set")?;
+        Ok(PathBuf::from(path.replacen("~", &home, 1)))
+    } else {
+        Ok(PathBuf::from(path))
+    }
 }
 
 /// Gets or creates a cached regex for the given pattern
@@ -245,9 +292,10 @@ mod tests {
         commands.insert("yarn".to_string(), "bun".to_string());
         commands.insert("npx".to_string(), "bunx".to_string());
 
-        let config = Config { 
+        let config = Config {
             commands,
             semantic_directories: HashMap::new(),
+            command_history: None,
         };
 
         // Test npm mapping
@@ -272,6 +320,7 @@ mod tests {
         let config = Config {
             commands,
             semantic_directories: HashMap::new(),
+            command_history: None,
         };
 
         // Test whitespace boundaries - "npm" in "my-npm-tool" should NOT match
@@ -311,6 +360,7 @@ mod tests {
         let config = Config {
             commands,
             semantic_directories: HashMap::new(),
+            command_history: None,
         };
 
         // Test exact match

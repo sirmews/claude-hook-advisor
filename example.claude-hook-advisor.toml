@@ -141,5 +141,18 @@ examples = "~/Documents/Documentation/my-project/examples"
 
 # Personal knowledge management
 notes = "~/Documents/Notes"
-research = "~/Documents/Research" 
+research = "~/Documents/Research"
 bookmarks = "~/Documents/Bookmarks"
+
+# ===== Command History Tracking =====
+# Track all Bash commands Claude runs to a SQLite database
+[command_history]
+enabled = true
+log_file = "~/.claude-hook-advisor/bash-history.db"
+
+# View history with:
+#   claude-hook-advisor --history                  # Show recent commands
+#   claude-hook-advisor --history --limit 50       # Show last 50 commands
+#   claude-hook-advisor --history --failures       # Show only failed commands
+#   claude-hook-advisor --history --pattern git    # Show git commands
+#   claude-hook-advisor --history --session <ID>   # Show specific session

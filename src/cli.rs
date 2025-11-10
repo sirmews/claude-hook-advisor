@@ -49,6 +49,37 @@ pub fn run_cli() -> Result<()> {
                 .help("Remove Claude Hook Advisor hooks from Claude Code settings")
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("history")
+                .long("history")
+                .help("View command history")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("limit")
+                .long("limit")
+                .value_name("N")
+                .help("Limit number of history results (default: 20)")
+                .value_parser(clap::value_parser!(usize)),
+        )
+        .arg(
+            Arg::new("session")
+                .long("session")
+                .value_name("ID")
+                .help("Filter history by session ID"),
+        )
+        .arg(
+            Arg::new("failures")
+                .long("failures")
+                .help("Show only failed commands (non-zero exit codes)")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("pattern")
+                .long("pattern")
+                .value_name("PATTERN")
+                .help("Filter commands by pattern (e.g., 'git', 'npm')"),
+        )
         .get_matches();
 
     let config_path = matches.get_one::<String>("config")
@@ -61,6 +92,13 @@ pub fn run_cli() -> Result<()> {
         run_smart_installation(config_path)
     } else if matches.get_flag("uninstall") {
         crate::installer::uninstall_claude_hooks()
+    } else if matches.get_flag("history") {
+        let limit = matches.get_one::<usize>("limit").copied();
+        let session_id = matches.get_one::<String>("session").map(|s| s.to_string());
+        let failures_only = matches.get_flag("failures");
+        let pattern = matches.get_one::<String>("pattern").map(|s| s.to_string());
+
+        show_command_history(config_path, limit, session_id, failures_only, pattern)
     } else {
         println!("Claude Hook Advisor v{}", env!("CARGO_PKG_VERSION"));
         println!();
@@ -70,6 +108,13 @@ pub fn run_cli() -> Result<()> {
         println!("Command Mapping:");
         println!("  --hook                    Run as a Claude Code hook");
         println!();
+        println!("Command History:");
+        println!("  --history                 View command history");
+        println!("  --limit <N>               Limit number of results (default: 20)");
+        println!("  --session <ID>            Filter by session ID");
+        println!("  --failures                Show only failed commands");
+        println!("  --pattern <PATTERN>       Filter by command pattern");
+        println!();
         println!("Configuration:");
         println!("  -c, --config <FILE>       Path to config file [default: .claude-hook-advisor.toml]");
         println!();
@@ -78,6 +123,124 @@ pub fn run_cli() -> Result<()> {
     }
 }
 
+
+/// Shows command history from the SQLite database.
+///
+/// # Arguments
+/// * `config_path` - Path to configuration file (to get history DB path)
+/// * `limit` - Maximum number of records to show
+/// * `session_id` - Optional session ID filter
+/// * `failures_only` - Whether to show only failed commands
+/// * `pattern` - Optional command pattern filter
+///
+/// # Returns
+/// * `Ok(())` - History displayed successfully
+/// * `Err` - If database query fails
+fn show_command_history(
+    config_path: &str,
+    limit: Option<usize>,
+    session_id: Option<String>,
+    failures_only: bool,
+    pattern: Option<String>,
+) -> Result<()> {
+    use crate::history;
+
+    // Load config to get history database path
+    let config = crate::config::load_config(config_path)
+        .context("Failed to load configuration")?;
+
+    // Get history configuration
+    let history_config = match config.command_history {
+        Some(ref cfg) if cfg.enabled => cfg,
+        Some(_) => {
+            println!("Command history is disabled in configuration.");
+            return Ok(());
+        }
+        None => {
+            println!("Command history is not configured.");
+            println!("Add a [command_history] section to your .claude-hook-advisor.toml:");
+            println!();
+            println!("[command_history]");
+            println!("enabled = true");
+            println!("log_file = \"~/.claude-hook-advisor/bash-history.db\"");
+            return Ok(());
+        }
+    };
+
+    // Expand tilde in log file path
+    let log_path = expand_tilde_path(&history_config.log_file)?;
+
+    // Check if database file exists
+    if !log_path.exists() {
+        println!("No command history found at: {}", log_path.display());
+        println!("Commands will be logged once you start using Claude Code with hooks enabled.");
+        return Ok(());
+    }
+
+    // Open database connection
+    let conn = history::init_database(&log_path)
+        .context("Failed to open command history database")?;
+
+    // Build query
+    let query = history::HistoryQuery {
+        limit: Some(limit.unwrap_or(20)),
+        session_id,
+        failures_only,
+        command_pattern: pattern,
+    };
+
+    // Execute query
+    let records = history::query_history(&conn, &query)
+        .context("Failed to query command history")?;
+
+    if records.is_empty() {
+        println!("No commands found matching the specified criteria.");
+        return Ok(());
+    }
+
+    // Display results
+    println!("Command History ({} records)", records.len());
+    println!("{}", "=".repeat(80));
+    println!();
+
+    for record in records {
+        let timestamp = record.timestamp;
+        let exit_code_str = match record.exit_code {
+            Some(0) => "✓".to_string(),
+            Some(code) => format!("✗ (exit: {})", code),
+            None => "?".to_string(),
+        };
+
+        println!("{}  {}", timestamp, exit_code_str);
+        println!("  Command: {}", record.command);
+
+        if let Some(cwd) = record.cwd {
+            println!("  CWD:     {}", cwd);
+        }
+
+        if record.was_replaced {
+            if let Some(original) = record.original_command {
+                println!("  Original: {}", original);
+            }
+        }
+
+        println!("  Session: {}", record.session_id);
+        println!();
+    }
+
+    Ok(())
+}
+
+/// Expands tilde (~) in file paths to the user's home directory
+fn expand_tilde_path(path: &str) -> Result<std::path::PathBuf> {
+    if path.starts_with("~/") {
+        let home = std::env::var("HOME")
+            .context("HOME environment variable not set")?;
+        Ok(std::path::PathBuf::from(path.replacen("~", &home, 1)))
+    } else {
+        Ok(std::path::PathBuf::from(path))
+    }
+}
 
 /// Smart installation that checks existing state and only makes necessary changes.
 /// 
@@ -192,6 +355,7 @@ fn create_smart_config(config_path: &str) -> Result<()> {
     let config = Config {
         commands,
         semantic_directories: std::collections::HashMap::new(), // Empty - will be comments only
+        command_history: None, // Will be added as commented example
     };
     
     // Generate TOML content
@@ -212,6 +376,12 @@ fn create_smart_config(config_path: &str) -> Result<()> {
 # central_docs = "~/Documents/Documentation"
 # project_docs = "~/Documents/Documentation/my-project"
 # claude_docs = "~/Documents/Documentation/claude"
+
+# Command history tracking - logs all Bash commands Claude runs
+# Uncomment to enable:
+# [command_history]
+# enabled = true
+# log_file = "~/.claude-hook-advisor/bash-history.db"
 "#);
     
     fs::write(config_path, final_content)

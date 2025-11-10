@@ -35,3 +35,6 @@ Thumbs.db
 
 .claude-hook-advisor.toml
 .crush
+
+# Claude Code test files
+.claude/
