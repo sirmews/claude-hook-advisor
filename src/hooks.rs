@@ -195,9 +195,9 @@ fn get_cached_regex(pattern: &str) -> Result<Regex> {
 
 /// Checks if a command matches any configured mappings and generates suggestions.
 ///
-/// Uses whitespace-boundary regex matching to ensure exact command matches (e.g., "npm"
-/// matches "npm install" but NOT "my-npm-tool"). The pattern only matches when the
-/// command is a standalone token separated by whitespace or at string boundaries.
+/// Only matches the primary command at the start of the line (e.g., "npm" matches
+/// "npm install" but NOT "my-npm-tool" or "npx npm"). This ensures command mappings
+/// only apply to the main command being executed, not subcommands or arguments.
 /// Returns the first matching pattern. Uses cached regex compilation for better performance.
 ///
 /// # Arguments
@@ -210,18 +210,18 @@ fn get_cached_regex(pattern: &str) -> Result<Regex> {
 /// * `Err` - If regex compilation fails
 pub fn check_command_mappings(config: &Config, command: &str) -> Result<Option<(String, String)>> {
     for (pattern, replacement) in &config.commands {
-        // Create regex pattern with whitespace boundaries using capturing groups
-        // Group 1: (^|\s) = start of string or whitespace
-        // Group 2: the pattern to match
-        // Group 3: (\s|$) = whitespace or end of string
-        // This ensures the pattern only matches standalone tokens, not substrings
-        let regex_pattern = format!(r"(^|\s)({})(\s|$)", regex::escape(pattern));
+        // Create regex pattern that only matches at start of line
+        // ^ = start of string (primary command position)
+        // Group 1: the pattern to match
+        // Group 2: (\s|$) = followed by whitespace or end of string
+        // This ensures only the primary command is matched, not subcommands
+        let regex_pattern = format!(r"^({})(\s|$)", regex::escape(pattern));
         let regex = get_cached_regex(&regex_pattern)?;
 
         if regex.is_match(command) {
-            // Generate suggested replacement, preserving whitespace boundaries
+            // Generate suggested replacement, preserving trailing whitespace
             let suggested_command = regex.replace_all(command, |caps: &regex::Captures| {
-                format!("{}{}{}", &caps[1], replacement, &caps[3])
+                format!("{}{}", replacement, &caps[2])
             });
             let suggestion = format!(
                 "Command '{pattern}' is mapped to use '{replacement}' instead. Try: {suggested_command}"
@@ -289,15 +289,19 @@ mod tests {
         let (_, replacement) = result.unwrap();
         assert_eq!(replacement, "bun   install   --verbose");
 
-        // Test npm at end of command
+        // Test npm NOT at start should NOT match (only matches primary command)
         let result = check_command_mappings(&config, "run npm").unwrap();
-        assert!(result.is_some());
-        let (_, replacement) = result.unwrap();
-        assert_eq!(replacement, "run bun");
+        assert!(result.is_none(), "'npm' in 'run npm' should NOT match (not primary command)");
 
         // Test npm-like substring should NOT match
         let result = check_command_mappings(&config, "npmc install").unwrap();
         assert!(result.is_none(), "'npmc' should NOT match 'npm'");
+
+        // Test command by itself (no args)
+        let result = check_command_mappings(&config, "npm").unwrap();
+        assert!(result.is_some());
+        let (_, replacement) = result.unwrap();
+        assert_eq!(replacement, "bun");
     }
 
     #[test]
@@ -323,11 +327,9 @@ mod tests {
         let result = check_command_mappings(&config, "gitRM file.txt").unwrap();
         assert!(result.is_none(), "'gitRM' should NOT match 'RM'");
 
-        // Test should match when RM is separated by whitespace
+        // Test should NOT match when RM is a subcommand (not at start)
         let result = check_command_mappings(&config, "git RM file.txt").unwrap();
-        assert!(result.is_some());
-        let (_, replacement) = result.unwrap();
-        assert_eq!(replacement, "git rm -i file.txt");
+        assert!(result.is_none(), "'RM' in 'git RM' should NOT match (not primary command)");
 
         // Test should NOT match when RM has hyphen prefix
         let result = check_command_mappings(&config, "git-RM file.txt").unwrap();
