@@ -51,6 +51,13 @@ Behind the scenes, you'll see:
 - **Powerful querying**: Filter by session, command pattern, exit code, or time range
 - **Audit trail**: Track what Claude actually executed for debugging and compliance
 
+### 🔒 Security Pattern Detection
+- **27 built-in security patterns**: Detect dangerous code patterns across 10+ languages
+- **Enabled by default**: Comprehensive security warnings out of the box, no configuration needed
+- **Multi-language coverage**: JavaScript/TypeScript, Python, SQL, Rust, Go, Swift, Java, PHP, Ruby
+- **Session-scoped warnings**: Each warning shown once per session to avoid noise
+- **Easy customization**: Disable specific patterns if too noisy for your workflow
+
 ### 🚀 Performance & Security
 - **Fast and lightweight**: Built in Rust for optimal performance
 - **Path canonicalization**: Security against directory traversal attacks
@@ -180,6 +187,24 @@ log_file = "~/.claude-hook-advisor/bash-history.db"
 Then view history anytime with: `claude-hook-advisor --history`
 
 See the [Command History Tracking](#command-history-tracking) section for full details.
+
+### 5. Security Patterns (Built-in, Enabled by Default)
+Security patterns are **automatically enabled** and require no configuration. They detect dangerous code patterns like:
+
+- **JavaScript/TypeScript**: `eval()`, `dangerouslySetInnerHTML`, command injection
+- **Python**: `eval()`, `pickle`, `os.system()`
+- **SQL**: String interpolation, format injection
+- **Rust**: `unsafe` blocks, shell commands
+- **Go, Swift, Java, PHP, Ruby**: Language-specific vulnerabilities
+
+**To disable noisy patterns:**
+```toml
+[security_pattern_overrides]
+swift_force_unwrap = false  # Disable if too noisy
+eval_injection = false      # Disable if you intentionally use eval
+```
+
+See the [Security Pattern Detection](#security-pattern-detection) section for full details.
 
 ### Example Configurations
 
@@ -439,6 +464,151 @@ Command History (5 records)
 - **Audit trail**: Track all command attempts (successful and failed) for compliance
 - **Learning**: See what commands Claude tries and which ones work
 - **Identify patterns**: Find commands that consistently fail and need attention
+
+## Security Pattern Detection
+
+Claude Hook Advisor includes **27 built-in security patterns** that automatically detect dangerous code patterns when Claude edits files. These patterns are **enabled by default** and cover common vulnerabilities across 10+ programming languages.
+
+### How It Works
+
+When Claude tries to edit a file using the `Edit`, `Write`, or `MultiEdit` tools, the PreToolUse hook:
+
+1. **Checks the file path** against glob patterns (e.g., `.github/workflows/*.yml`)
+2. **Scans the content** for dangerous substrings (e.g., `eval(`, `dangerouslySetInnerHTML`)
+3. **Blocks the operation** if a pattern matches and shows a security warning
+4. **Tracks warnings per-session** so each warning is only shown once
+
+This happens transparently - you'll see Claude acknowledge the security warning and then proceed more carefully or ask for your guidance.
+
+### Built-in Security Patterns
+
+#### JavaScript / TypeScript (7 patterns)
+- **`eval_injection`**: Detects `eval()` usage that can execute arbitrary code
+- **`new_function_injection`**: Detects `new Function()` code injection risks
+- **`innerHTML_xss`**: Detects `innerHTML` XSS vulnerabilities
+- **`dangerouslySetInnerHTML`**: Detects React XSS risks
+- **`document_write_xss`**: Detects `document.write()` XSS attacks
+- **`child_process_exec`**: Detects command injection via `exec()`/`execSync()`
+
+#### Python (4 patterns)
+- **`python_eval`**: Detects `eval()` arbitrary code execution
+- **`python_exec`**: Detects `exec()` arbitrary code execution
+- **`pickle_deserialization`**: Detects unsafe `pickle.load()` usage
+- **`os_system_injection`**: Detects command injection via `os.system()`
+
+#### SQL (2 patterns)
+- **`sql_injection`**: Detects SQL injection via string interpolation
+- **`sql_string_format`**: Detects SQL injection via format strings
+
+#### Rust (2 patterns)
+- **`rust_unsafe_block`**: Detects `unsafe {}` blocks that bypass safety
+- **`rust_command_injection`**: Detects shell command usage that could allow injection
+
+#### Go (2 patterns)
+- **`go_command_injection`**: Detects shell command injection risks
+- **`go_sql_injection`**: Detects SQL injection via `fmt.Sprintf`
+
+#### Swift (3 patterns)
+- **`swift_force_unwrap`**: Detects force unwrap `!` that can cause crashes
+- **`swift_unsafe_operations`**: Detects unsafe pointer operations
+- **`swift_nspredicate_format`**: Detects NSPredicate injection vulnerabilities
+
+#### Java (2 patterns)
+- **`java_runtime_exec`**: Detects command injection via `Runtime.exec()`
+- **`java_deserialization`**: Detects unsafe deserialization
+
+#### PHP (2 patterns)
+- **`php_eval`**: Detects `eval()` arbitrary code execution
+- **`php_unserialize`**: Detects object injection via `unserialize()`
+
+#### Ruby (2 patterns)
+- **`ruby_eval`**: Detects `eval()` variants (eval, instance_eval, class_eval)
+- **`ruby_yaml_load`**: Detects arbitrary code execution via `YAML.load`
+
+#### GitHub Actions (2 patterns)
+- **`github_actions_workflow`**: Detects workflow injection in `.yml` files
+- **`github_actions_workflow_yaml`**: Detects workflow injection in `.yaml` files
+
+### Example Security Warning
+
+When Claude tries to write code with `eval()`:
+
+```
+⚠️ Security Warning: eval() executes arbitrary code and is a major security risk.
+
+Consider using JSON.parse() for data parsing or alternative design patterns that
+don't require code evaluation. Only use eval() if you truly need to evaluate
+arbitrary code.
+```
+
+Claude will see this warning and either:
+- Find a safer alternative approach
+- Ask you if you really want to proceed with the risky pattern
+- Explain why the code needs the potentially dangerous operation
+
+### Disabling Security Patterns
+
+All patterns are enabled by default. If a pattern is too noisy for your workflow, disable it in your `.claude-hook-advisor.toml`:
+
+```toml
+[security_pattern_overrides]
+# Disable Swift force unwrap warnings (common in Swift code)
+swift_force_unwrap = false
+
+# Disable eval warnings (if you're working on a REPL or interpreter)
+eval_injection = false
+python_eval = false
+
+# Disable unsafe warnings (if you're doing low-level systems programming)
+rust_unsafe_block = false
+```
+
+**Pattern names:**
+```
+github_actions_workflow          github_actions_workflow_yaml
+eval_injection                   new_function_injection
+react_dangerously_set_html       document_write_xss
+innerHTML_xss                    child_process_exec
+pickle_deserialization           os_system_injection
+python_eval                      python_exec
+sql_injection                    sql_string_format
+rust_unsafe_block                rust_command_injection
+go_command_injection             go_sql_injection
+swift_force_unwrap               swift_unsafe_operations
+swift_nspredicate_format         java_runtime_exec
+java_deserialization             php_eval
+php_unserialize                  ruby_eval
+ruby_yaml_load
+```
+
+### Configuration Examples
+
+**Disable noisy patterns for Swift development:**
+```toml
+[security_pattern_overrides]
+swift_force_unwrap = false  # Force unwrap is very common in Swift
+```
+
+**Disable eval warnings for building a JavaScript REPL:**
+```toml
+[security_pattern_overrides]
+eval_injection = false
+new_function_injection = false
+```
+
+**Disable unsafe warnings for systems programming:**
+```toml
+[security_pattern_overrides]
+rust_unsafe_block = false
+```
+
+### Benefits
+
+- **Prevent vulnerabilities**: Catch security issues before code is written
+- **Educational**: Learn about security patterns as you code
+- **Zero configuration**: Works out of the box with no setup
+- **Low noise**: Warnings shown once per session per file
+- **Multi-language**: Comprehensive coverage across major languages
 
 ## Example Output
 
