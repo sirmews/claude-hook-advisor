@@ -15,6 +15,8 @@ pub struct Config {
     pub semantic_directories: HashMap<String, String>,
     #[serde(default)]
     pub command_history: Option<CommandHistoryConfig>,
+    #[serde(default)]
+    pub security_patterns: Vec<SecurityPattern>,
 }
 
 /// Configuration for command history tracking
@@ -24,6 +26,20 @@ pub struct CommandHistoryConfig {
     pub enabled: bool,
     #[serde(default = "default_history_path")]
     pub log_file: String,
+}
+
+/// Security pattern for detecting risky code patterns in file edits.
+///
+/// Patterns can match based on file path patterns (glob-style) or content substrings.
+/// When a match is found, the specified reminder is shown to Claude.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SecurityPattern {
+    pub rule_name: String,
+    #[serde(default)]
+    pub path_pattern: Option<String>,
+    #[serde(default)]
+    pub content_substrings: Vec<String>,
+    pub reminder: String,
 }
 
 fn default_true() -> bool {
@@ -72,14 +88,35 @@ pub struct ToolResponse {
 }
 
 /// Tool-specific input parameters from Claude Code.
-/// 
-/// Contains the actual command and optional description for Bash tool invocations.
+///
+/// Contains the actual command and optional description for Bash tool invocations,
+/// and file editing parameters for Edit/Write/MultiEdit tools.
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct ToolInput {
+    // Bash tool parameters
     #[serde(default)]
     pub command: Option<String>,
     #[allow(dead_code)]
     pub description: Option<String>,
+
+    // File editing tool parameters
+    #[serde(default)]
+    pub file_path: Option<String>,
+    #[serde(default)]
+    pub content: Option<String>,      // Write tool
+    #[serde(default)]
+    pub old_string: Option<String>,   // Edit tool
+    #[serde(default)]
+    pub new_string: Option<String>,   // Edit tool
+    #[serde(default)]
+    pub edits: Option<Vec<EditOperation>>,  // MultiEdit tool
+}
+
+/// Single edit operation for MultiEdit tool
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EditOperation {
+    pub old_string: String,
+    pub new_string: String,
 }
 
 /// Response data sent back to Claude Code hook system.
