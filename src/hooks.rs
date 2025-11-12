@@ -3,7 +3,8 @@
 use crate::config::load_config;
 use crate::directory::detect_directory_references;
 use crate::history;
-use crate::types::{Config, HookInput, HookOutput};
+use crate::security::get_default_security_patterns;
+use crate::types::{Config, HookInput, HookOutput, SecurityPattern};
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -143,23 +144,39 @@ fn handle_bash_tool(config: &Config, hook_input: &HookInput, replace_mode: bool)
     Ok(())
 }
 
+/// Gets the list of enabled security patterns by merging defaults with overrides.
+///
+/// Default patterns are enabled unless explicitly disabled in the config.
+fn get_enabled_security_patterns(config: &Config) -> Vec<SecurityPattern> {
+    let defaults = get_default_security_patterns();
+
+    defaults
+        .into_iter()
+        .filter(|pattern| {
+            // Check if pattern is explicitly disabled
+            !matches!(
+                config.security_pattern_overrides.get(&pattern.rule_name),
+                Some(false)
+            )
+        })
+        .collect()
+}
+
 /// Handles file editing tools (Edit/Write/MultiEdit) for security pattern detection.
 ///
 /// Checks file paths and content against configured security patterns to warn
 /// about potential security vulnerabilities before files are modified.
 ///
 /// # Arguments
-/// * `config` - Configuration containing security patterns
+/// * `config` - Configuration containing security pattern overrides
 /// * `hook_input` - Hook input data containing file editing parameters
 ///
 /// # Returns
 /// * `Ok(())` - Processing completed (may exit process with blocking decision)
 /// * `Err` - If security pattern check fails
 fn handle_file_tool(config: &Config, hook_input: &HookInput) -> Result<()> {
-    // Skip if no security patterns configured
-    if config.security_patterns.is_empty() {
-        return Ok(());
-    }
+    // Get enabled security patterns (defaults with overrides applied)
+    let security_patterns = get_enabled_security_patterns(config);
 
     let Some(tool_input) = &hook_input.tool_input else {
         return Ok(());
@@ -173,7 +190,7 @@ fn handle_file_tool(config: &Config, hook_input: &HookInput) -> Result<()> {
     let content = extract_content_from_tool_input(hook_input.tool_name.as_deref(), tool_input);
 
     // Check for security pattern matches
-    if let Some((rule_name, reminder)) = check_security_patterns(config, file_path, &content)? {
+    if let Some((rule_name, reminder)) = check_security_patterns(&security_patterns, file_path, &content)? {
         // Check if we've already shown this warning in this session
         if should_show_warning(&hook_input.session_id, file_path, &rule_name)? {
             // Mark warning as shown
@@ -356,7 +373,7 @@ fn get_cached_regex(pattern: &str) -> Result<Regex> {
     Ok(regex)
 }
 
-/// Checks if a file path or content matches any configured security patterns.
+/// Checks if a file path or content matches any security patterns.
 ///
 /// Security patterns can match based on:
 /// 1. File path glob patterns (e.g., ".github/workflows/*.yml")
@@ -365,7 +382,7 @@ fn get_cached_regex(pattern: &str) -> Result<Regex> {
 /// Returns the first matching pattern.
 ///
 /// # Arguments
-/// * `config` - Configuration containing security patterns
+/// * `patterns` - List of security patterns to check
 /// * `file_path` - The file path being edited
 /// * `content` - The content being written/edited
 ///
@@ -373,11 +390,11 @@ fn get_cached_regex(pattern: &str) -> Result<Regex> {
 /// * `Ok(Some((rule_name, reminder)))` - If a pattern matches
 /// * `Ok(None)` - If no patterns match
 /// * `Err` - If pattern matching fails
-fn check_security_patterns(config: &Config, file_path: &str, content: &str) -> Result<Option<(String, String)>> {
+fn check_security_patterns(patterns: &[SecurityPattern], file_path: &str, content: &str) -> Result<Option<(String, String)>> {
     // Normalize file path by removing leading slashes
     let normalized_path = file_path.trim_start_matches('/');
 
-    for pattern in &config.security_patterns {
+    for pattern in patterns {
         // Check path-based patterns using glob matching
         if let Some(path_pattern) = &pattern.path_pattern {
             if glob_match(path_pattern, normalized_path)? {
@@ -524,7 +541,7 @@ mod tests {
             commands,
             semantic_directories: HashMap::new(),
             command_history: None,
-            security_patterns: Vec::new(),
+            security_pattern_overrides: HashMap::new(),
         };
 
         // Test npm mapping
@@ -550,7 +567,7 @@ mod tests {
             commands,
             semantic_directories: HashMap::new(),
             command_history: None,
-            security_patterns: Vec::new(),
+            security_pattern_overrides: HashMap::new(),
         };
 
         // Test whitespace boundaries - "npm" in "my-npm-tool" should NOT match
@@ -591,7 +608,7 @@ mod tests {
             commands,
             semantic_directories: HashMap::new(),
             command_history: None,
-            security_patterns: Vec::new(),
+            security_pattern_overrides: HashMap::new(),
         };
 
         // Test exact match

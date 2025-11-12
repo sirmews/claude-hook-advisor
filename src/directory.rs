@@ -136,7 +136,7 @@ mod tests {
             commands: HashMap::new(),
             semantic_directories,
             command_history: None,
-            security_patterns: Vec::new(),
+            security_pattern_overrides: HashMap::new(),
         }
     }
 

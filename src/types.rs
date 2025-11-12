@@ -16,7 +16,7 @@ pub struct Config {
     #[serde(default)]
     pub command_history: Option<CommandHistoryConfig>,
     #[serde(default)]
-    pub security_patterns: Vec<SecurityPattern>,
+    pub security_pattern_overrides: HashMap<String, bool>,
 }
 
 /// Configuration for command history tracking

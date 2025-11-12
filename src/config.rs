@@ -25,7 +25,7 @@ pub fn load_config(config_path: &str) -> Result<Config> {
             commands: HashMap::new(),
             semantic_directories: HashMap::new(),
             command_history: None,
-            security_patterns: Vec::new(),
+            security_pattern_overrides: HashMap::new(),
         });
     }
 
