@@ -1,10 +1,21 @@
 # Claude Hook Advisor Makefile
 # Similar to hashtag-search structure
 
-.PHONY: build install clean test release help
+.PHONY: build install clean test release help dev-setup
 
 # Default target
 all: build
+
+# Development setup - run this after cloning
+dev-setup:
+	@echo "Setting up development environment..."
+	@./setup-coco-aliases.sh
+	@echo ""
+	@echo "Running tests to verify setup..."
+	@$(MAKE) test
+	@echo ""
+	@echo "✅ Development environment ready!"
+	@echo "You can now use: git commit -m \"feat: your message\""
 
 # Build the project in debug mode
 build:
@@ -58,6 +69,7 @@ run-example:
 # Show help
 help:
 	@echo "Available targets:"
+	@echo "  dev-setup     - Set up development environment (run after cloning)"
 	@echo "  build         - Build in debug mode"
 	@echo "  release       - Build in release mode"
 	@echo "  install       - Install using cargo (globally available)"
