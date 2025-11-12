@@ -1,0 +1,45 @@
+# CocoGitto Configuration
+# Documentation: https://docs.cocogitto.io/
+
+# Branch whitelist - only these branches can create releases
+branch_whitelist = ["main"]
+
+# Tag prefix for releases
+tag_prefix = "v"
+
+# Ignore merge commits in changelog
+ignore_merge_commits = true
+
+# Changelog configuration
+[changelog]
+path = "CHANGELOG.md"
+template = "default"
+remote = "github.com"
+repository = "claude-hook-advisor"
+owner = "sirmews"
+
+# Conventional commit types
+[commit_types]
+feat = { changelog_title = "Features" }
+fix = { changelog_title = "Bug Fixes" }
+docs = { changelog_title = "Documentation" }
+style = { changelog_title = "Styling" }
+refactor = { changelog_title = "Refactoring" }
+perf = { changelog_title = "Performance" }
+test = { changelog_title = "Tests" }
+chore = { changelog_title = "Miscellaneous" }
+ci = { changelog_title = "CI/CD" }
+build = { changelog_title = "Build" }
+
+# Bump profiles for different scenarios
+[bump_profiles.default]
+# Run tests before bumping version
+pre_bump_hooks = [
+    "cargo test --all-features",
+]
+
+# Build after version bump to ensure everything compiles
+post_bump_hooks = [
+    "cargo build --release",
+    "echo '\n✅ Version bumped successfully! Don't forget to push tags: git push --follow-tags'",
+]
