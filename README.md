@@ -344,9 +344,21 @@ claude-hook-advisor --history --session abc123
 Each command record includes:
 - **Timestamp**: When the command was executed
 - **Command**: The exact command that ran
+- **Status**: Success (✓) or Failed (✗) - automatically tracked
 - **Exit code**: Success (0) or failure code
 - **Working directory**: Where the command was executed
 - **Session ID**: Link commands to Claude Code sessions
+
+### How Failure Detection Works
+
+The tool uses a clever two-hook approach to track both successful and failed commands:
+
+1. **PreToolUse Hook**: Logs every command Claude *attempts* to run with status="pending"
+2. **PostToolUse Hook**: Updates the status to "success" when commands complete
+
+**Key insight**: PostToolUse hooks only fire for successful commands in Claude Code. Any command that remains with status="pending" means it failed (PostToolUse never fired).
+
+This workaround solves the limitation where Claude Code doesn't send PostToolUse events for failed commands, allowing you to track all command attempts and their outcomes.
 
 ### Example Output
 
@@ -364,18 +376,25 @@ Command History (5 records)
   CWD:     /home/user/my-project
   Session: abc123-def456
 
-2025-11-10T14:30:30Z  ✗ (exit: 1)
+2025-11-10T14:30:30Z  ✗ FAILED
   Command: npm test
+  CWD:     /home/user/my-project
+  Session: abc123-def456
+
+2025-11-10T14:30:35Z  ✗ FAILED
+  Command: ls /nonexistent
   CWD:     /home/user/my-project
   Session: abc123-def456
 ```
 
 ### Use Cases
 
+- **Track failures**: Automatically identify which commands failed without manual checking
+- **Debugging**: "Which commands failed in this session?" - `--history --failures`
 - **Retrieve that perfect command**: "What was that complex curl command Claude ran yesterday?"
-- **Debugging failures**: "Which commands failed in this session?"
-- **Audit trail**: Track all commands for compliance or security review
-- **Learning**: See what commands Claude uses to solve problems
+- **Audit trail**: Track all command attempts (successful and failed) for compliance
+- **Learning**: See what commands Claude tries and which ones work
+- **Identify patterns**: Find commands that consistently fail and need attention
 
 ## Example Output
 
