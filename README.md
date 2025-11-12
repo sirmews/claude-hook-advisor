@@ -76,6 +76,33 @@ cd claude-hook-advisor
 make install
 ```
 
+### Claude Code Plugin (Easiest)
+
+The easiest way to use claude-hook-advisor is via the **Claude Code Plugin**, which bundles hooks and slash commands together:
+
+```bash
+# 1. Install the binary first
+cargo install claude-hook-advisor
+
+# 2. Install the plugin
+cd claude-hook-advisor
+./plugin/install.sh
+```
+
+**Benefits:**
+- ✅ **One-command installation** - Automatic hook setup
+- ✅ **Built-in slash commands** - `/history`, `/history-failures`, `/history-search`
+- ✅ **Team sharing** - Easy to distribute to team members
+- ✅ **Auto-configured** - Works out of the box
+
+**Available slash commands:**
+- `/history` - View recent command history with AI analysis
+- `/history-failures` - Show only failed commands with suggested fixes
+- `/history-search <pattern>` - Search for specific commands
+- `/history-session <id>` - View complete session timeline
+
+See [plugin/README.md](plugin/README.md) for detailed plugin documentation.
+
 ## Quick Start
 
 ### 1. Install and Configure Hooks

@@ -1,0 +1,31 @@
+# Claude Hook Advisor Configuration
+# Copy this file to your project root as .claude-hook-advisor.toml
+
+# Command Mappings - Replace commands with preferred alternatives
+[commands]
+# Node.js project examples
+# npm = "bun"
+# yarn = "bun"
+# npx = "bunx"
+
+# Python project examples
+# pip = "uv pip"
+# pip install = "uv add"
+
+# General tool replacements
+# cat = "bat"
+# ls = "eza"
+# grep = "rg"
+# curl = "wget --verbose"
+
+# Semantic Directory Aliases - Natural language directory references
+[semantic_directories]
+# Use natural language to reference directories
+# docs = "~/Documents/Documentation"
+# project_docs = "~/Documents/Documentation/my-project"
+# central_docs = "~/Documents/Documentation"
+
+# Command History Tracking - Track all bash commands Claude runs
+[command_history]
+enabled = true
+log_file = "~/.claude-hook-advisor/bash-history.db"
