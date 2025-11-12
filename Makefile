@@ -1,7 +1,7 @@
 # Claude Hook Advisor Makefile
 # Similar to hashtag-search structure
 
-.PHONY: build install clean test release help dev-setup
+.PHONY: build build-release install clean test release release-patch release-minor release-major help dev-setup
 
 # Default target
 all: build
@@ -22,22 +22,57 @@ build:
 	cargo build
 
 # Build in release mode for production
-release:
+build-release:
 	cargo build --release
+
+# Create a new release (version bump, changelog, tag)
+release:
+	@echo "Checking commits are valid..."
+	@cog check || (echo "❌ Some commits don't follow conventional format. Fix them first." && exit 1)
+	@echo ""
+	@echo "Current version: $$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
+	@echo ""
+	@echo "Preview of version bump:"
+	@cog bump --dry-run --auto || (echo "Run 'cog bump --patch', '--minor', or '--major' manually" && exit 1)
+	@echo ""
+	@read -p "Proceed with release? [y/N] " confirm && [ "$$confirm" = "y" ] || (echo "Release cancelled" && exit 1)
+	@echo ""
+	@echo "Creating release..."
+	@cog bump --auto
+	@echo ""
+	@echo "✅ Release created!"
+	@echo "New version: $$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  git push --follow-tags    # Push commits and tags to remote"
+	@echo "  cargo publish             # Publish to crates.io (if ready)"
+
+# Create a new release with explicit version bump
+release-patch:
+	@cog bump --patch
+	@echo "✅ Patch release created! Run: git push --follow-tags"
+
+release-minor:
+	@cog bump --minor
+	@echo "✅ Minor release created! Run: git push --follow-tags"
+
+release-major:
+	@cog bump --major
+	@echo "✅ Major release created! Run: git push --follow-tags"
 
 # Install the binary using cargo (like hashtag-search)
 install:
 	cargo install --path .
 
 # Install to ~/.local/bin manually
-install-local: release
+install-local: build-release
 	mkdir -p ~/.local/bin
 	cp target/release/claude-hook-advisor ~/.local/bin/
 	@echo "claude-hook-advisor installed to ~/.local/bin/claude-hook-advisor"
 	@echo "Make sure ~/.local/bin is in your PATH"
 
 # Install system-wide (requires sudo)
-install-system: release
+install-system: build-release
 	sudo cp target/release/claude-hook-advisor /usr/local/bin/
 	@echo "claude-hook-advisor installed to /usr/local/bin/claude-hook-advisor"
 
@@ -69,16 +104,28 @@ run-example:
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  dev-setup     - Set up development environment (run after cloning)"
-	@echo "  build         - Build in debug mode"
-	@echo "  release       - Build in release mode"
-	@echo "  install       - Install using cargo (globally available)"
-	@echo "  install-local - Install to ~/.local/bin"
-	@echo "  install-system- Install system-wide (requires sudo)"
-	@echo "  test          - Run tests"
-	@echo "  clean         - Clean build artifacts"
-	@echo "  fmt           - Format code"
-	@echo "  lint          - Run clippy linting"
-	@echo "  check         - Check code without building"
-	@echo "  run-example   - Test with example JSON input"
-	@echo "  help          - Show this help"
+	@echo ""
+	@echo "Development:"
+	@echo "  dev-setup      - Set up development environment (run after cloning)"
+	@echo "  build          - Build in debug mode"
+	@echo "  build-release  - Build in release mode"
+	@echo "  test           - Run tests"
+	@echo "  fmt            - Format code"
+	@echo "  lint           - Run clippy linting"
+	@echo "  check          - Check code without building"
+	@echo ""
+	@echo "Release:"
+	@echo "  release        - Create new release (auto-detect version bump)"
+	@echo "  release-patch  - Create patch release (0.2.1 -> 0.2.2)"
+	@echo "  release-minor  - Create minor release (0.2.1 -> 0.3.0)"
+	@echo "  release-major  - Create major release (0.2.1 -> 1.0.0)"
+	@echo ""
+	@echo "Installation:"
+	@echo "  install        - Install using cargo (globally available)"
+	@echo "  install-local  - Install to ~/.local/bin"
+	@echo "  install-system - Install system-wide (requires sudo)"
+	@echo ""
+	@echo "Other:"
+	@echo "  clean          - Clean build artifacts"
+	@echo "  run-example    - Test with example JSON input"
+	@echo "  help           - Show this help"
