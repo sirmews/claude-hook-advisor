@@ -205,13 +205,29 @@ fn show_command_history(
 
     for record in records {
         let timestamp = record.timestamp;
-        let exit_code_str = match record.exit_code {
-            Some(0) => "✓".to_string(),
-            Some(code) => format!("✗ (exit: {})", code),
-            None => "?".to_string(),
+
+        // Display status based on status field
+        let status_str = match record.status.as_str() {
+            "success" => "✓".to_string(),
+            "pending" => {
+                // Pending means failed (PostToolUse never fired)
+                if let Some(code) = record.exit_code {
+                    format!("✗ FAILED (exit: {})", code)
+                } else {
+                    "✗ FAILED".to_string()
+                }
+            }
+            _ => {
+                // Fallback to exit code for backwards compatibility
+                match record.exit_code {
+                    Some(0) => "✓".to_string(),
+                    Some(code) => format!("✗ (exit: {})", code),
+                    None => "?".to_string(),
+                }
+            }
         };
 
-        println!("{}  {}", timestamp, exit_code_str);
+        println!("{}  {}", timestamp, status_str);
         println!("  Command: {}", record.command);
 
         if let Some(cwd) = record.cwd {
@@ -225,6 +241,12 @@ fn show_command_history(
         }
 
         println!("  Session: {}", record.session_id);
+
+        // Show status if not standard success/pending
+        if record.status != "success" && record.status != "pending" {
+            println!("  Status:  {}", record.status);
+        }
+
         println!();
     }
 

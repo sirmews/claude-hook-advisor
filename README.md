@@ -58,6 +58,23 @@ Behind the scenes, you'll see:
 
 ## Installation
 
+### Claude Code Plugin Marketplace (Easiest)
+
+The fastest way to get started is via the Claude Code plugin marketplace:
+
+```
+/plugin marketplace add sirmews/claude-hook-advisor
+/plugin install claude-hook-advisor@sirmews
+```
+
+Then restart Claude Code. See [MARKETPLACE.md](MARKETPLACE.md) for complete details.
+
+**What you get:**
+- ✅ Automatic hook setup - No manual configuration
+- ✅ Slash commands - `/history`, `/history-failures`, `/history-search`
+- ✅ One-command installation
+- ✅ Easy team distribution
+
 ### From crates.io (Recommended)
 
 Install directly from crates.io using cargo:
@@ -75,6 +92,33 @@ git clone https://github.com/sirmews/claude-hook-advisor.git
 cd claude-hook-advisor
 make install
 ```
+
+### Claude Code Plugin (Easiest)
+
+The easiest way to use claude-hook-advisor is via the **Claude Code Plugin**, which bundles hooks and slash commands together:
+
+```bash
+# 1. Install the binary first
+cargo install claude-hook-advisor
+
+# 2. Install the plugin
+cd claude-hook-advisor
+./plugin/install.sh
+```
+
+**Benefits:**
+- ✅ **One-command installation** - Automatic hook setup
+- ✅ **Built-in slash commands** - `/history`, `/history-failures`, `/history-search`
+- ✅ **Team sharing** - Easy to distribute to team members
+- ✅ **Auto-configured** - Works out of the box
+
+**Available slash commands:**
+- `/history` - View recent command history with AI analysis
+- `/history-failures` - Show only failed commands with suggested fixes
+- `/history-search <pattern>` - Search for specific commands
+- `/history-session <id>` - View complete session timeline
+
+See [plugin/README.md](plugin/README.md) for detailed plugin documentation.
 
 ## Quick Start
 
@@ -344,9 +388,21 @@ claude-hook-advisor --history --session abc123
 Each command record includes:
 - **Timestamp**: When the command was executed
 - **Command**: The exact command that ran
+- **Status**: Success (✓) or Failed (✗) - automatically tracked
 - **Exit code**: Success (0) or failure code
 - **Working directory**: Where the command was executed
 - **Session ID**: Link commands to Claude Code sessions
+
+### How Failure Detection Works
+
+The tool uses a clever two-hook approach to track both successful and failed commands:
+
+1. **PreToolUse Hook**: Logs every command Claude *attempts* to run with status="pending"
+2. **PostToolUse Hook**: Updates the status to "success" when commands complete
+
+**Key insight**: PostToolUse hooks only fire for successful commands in Claude Code. Any command that remains with status="pending" means it failed (PostToolUse never fired).
+
+This workaround solves the limitation where Claude Code doesn't send PostToolUse events for failed commands, allowing you to track all command attempts and their outcomes.
 
 ### Example Output
 
@@ -364,18 +420,25 @@ Command History (5 records)
   CWD:     /home/user/my-project
   Session: abc123-def456
 
-2025-11-10T14:30:30Z  ✗ (exit: 1)
+2025-11-10T14:30:30Z  ✗ FAILED
   Command: npm test
+  CWD:     /home/user/my-project
+  Session: abc123-def456
+
+2025-11-10T14:30:35Z  ✗ FAILED
+  Command: ls /nonexistent
   CWD:     /home/user/my-project
   Session: abc123-def456
 ```
 
 ### Use Cases
 
+- **Track failures**: Automatically identify which commands failed without manual checking
+- **Debugging**: "Which commands failed in this session?" - `--history --failures`
 - **Retrieve that perfect command**: "What was that complex curl command Claude ran yesterday?"
-- **Debugging failures**: "Which commands failed in this session?"
-- **Audit trail**: Track all commands for compliance or security review
-- **Learning**: See what commands Claude uses to solve problems
+- **Audit trail**: Track all command attempts (successful and failed) for compliance
+- **Learning**: See what commands Claude tries and which ones work
+- **Identify patterns**: Find commands that consistently fail and need attention
 
 ## Example Output
 

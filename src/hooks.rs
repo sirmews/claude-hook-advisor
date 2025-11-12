@@ -56,15 +56,16 @@ pub fn run_as_hook(config_path: &str, replace_mode: bool) -> Result<()> {
 }
 
 /// Handles PreToolUse hook events for command mapping and replacement.
-/// 
-/// Processes Bash commands and checks for configured mappings. If a mapping
-/// is found, outputs JSON decision to block or replace the command.
-/// 
+///
+/// Processes Bash commands, logs them as "pending", and checks for configured
+/// mappings. If a mapping is found, outputs JSON decision to block or replace
+/// the command.
+///
 /// # Arguments
 /// * `config` - Configuration containing command mappings
 /// * `hook_input` - Hook input data from Claude Code
 /// * `replace_mode` - Whether to replace or block commands
-/// 
+///
 /// # Returns
 /// * `Ok(())` - Processing completed (may exit process with JSON output)
 /// * `Err` - If command mapping check fails
@@ -81,6 +82,30 @@ fn handle_pre_tool_use(config: &Config, hook_input: &HookInput, replace_mode: bo
     let Some(command) = &tool_input.command else {
         return Ok(());
     };
+
+    // Log command as pending if history tracking is enabled
+    if let Some(history_config) = &config.command_history {
+        if history_config.enabled {
+            let log_path = expand_tilde(&history_config.log_file)?;
+
+            // Initialize database connection
+            if let Ok(conn) = history::init_database(&log_path) {
+                // Create pending record
+                let record = history::create_record(
+                    &hook_input.session_id,
+                    command,
+                    None, // No exit code yet
+                    hook_input.cwd.as_deref(),
+                    false, // Not yet replaced
+                    None,  // No original command yet
+                    "pending",
+                );
+
+                // Log the pending command (ignore errors to not block execution)
+                let _ = history::log_command(&conn, &record);
+            }
+        }
+    }
 
     // Check for command mappings
     if let Some((suggestion, replacement_cmd)) = check_command_mappings(config, command)? {
@@ -144,8 +169,9 @@ fn handle_user_prompt_submit(config: &Config, hook_input: &HookInput) -> Result<
 
 /// Handles PostToolUse hook events for command execution tracking.
 ///
-/// Analyzes command execution results and logs them to SQLite database if enabled.
-/// Tracks command history, exit codes, and whether commands were replaced.
+/// Updates the status of pending commands to "success" when they complete.
+/// This only fires for successful commands, so any pending commands that
+/// remain after execution are implicitly failed.
 ///
 /// # Arguments
 /// * `config` - Configuration for tracking settings
@@ -190,27 +216,33 @@ fn handle_post_tool_use(config: &Config, hook_input: &HookInput) -> Result<()> {
     let conn = history::init_database(&log_path)
         .context("Failed to initialize command history database")?;
 
-    // Check if this command was a replacement
-    let (was_replaced, original_command) = if let Some((_, _)) = check_command_mappings(config, command)? {
-        // This would have been replaced - find the original
-        // For now, we don't have the original in PostToolUse, so we mark it as potentially replaced
-        (false, None)
-    } else {
-        (false, None)
-    };
-
-    // Create and log the command record
-    let record = history::create_record(
+    // Update the pending command to success
+    let updated = history::update_command_status(
+        &conn,
         &hook_input.session_id,
         command,
+        "success",
         tool_response.exit_code,
-        hook_input.cwd.as_deref(),
-        was_replaced,
-        original_command,
-    );
+    )
+    .context("Failed to update command status")?;
 
-    history::log_command(&conn, &record)
-        .context("Failed to log command to history")?;
+    // If no pending command was found to update, this might be a command
+    // that wasn't logged in PreToolUse (e.g., if hooks were just enabled)
+    // In that case, create a new record directly as success
+    if !updated {
+        let record = history::create_record(
+            &hook_input.session_id,
+            command,
+            tool_response.exit_code,
+            hook_input.cwd.as_deref(),
+            false,
+            None,
+            "success",
+        );
+
+        history::log_command(&conn, &record)
+            .context("Failed to log command to history")?;
+    }
 
     Ok(())
 }

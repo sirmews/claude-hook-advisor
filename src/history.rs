@@ -15,6 +15,7 @@ pub struct CommandRecord {
     pub cwd: Option<String>,
     pub was_replaced: bool,
     pub original_command: Option<String>,
+    pub status: String, // "pending", "success", "failed"
 }
 
 /// Initialize the command history database
@@ -38,11 +39,19 @@ pub fn init_database(db_path: &PathBuf) -> Result<Connection> {
             exit_code INTEGER,
             cwd TEXT,
             was_replaced INTEGER NOT NULL DEFAULT 0,
-            original_command TEXT
+            original_command TEXT,
+            status TEXT NOT NULL DEFAULT 'pending'
         )",
         [],
     )
     .context("Failed to create commands table")?;
+
+    // Add status column to existing tables (migration)
+    // This will fail silently if column already exists
+    let _ = conn.execute(
+        "ALTER TABLE commands ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'",
+        [],
+    );
 
     // Create indexes for common queries
     conn.execute(
@@ -63,8 +72,8 @@ pub fn init_database(db_path: &PathBuf) -> Result<Connection> {
 /// Log a command to the history database
 pub fn log_command(conn: &Connection, record: &CommandRecord) -> Result<()> {
     conn.execute(
-        "INSERT INTO commands (timestamp, session_id, command, exit_code, cwd, was_replaced, original_command)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO commands (timestamp, session_id, command, exit_code, cwd, was_replaced, original_command, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             record.timestamp,
             record.session_id,
@@ -73,6 +82,7 @@ pub fn log_command(conn: &Connection, record: &CommandRecord) -> Result<()> {
             record.cwd,
             record.was_replaced as i32,
             record.original_command,
+            record.status,
         ],
     )
     .context("Failed to insert command into history")?;
@@ -92,7 +102,8 @@ pub struct HistoryQuery {
 /// Retrieve command history with optional filters
 pub fn query_history(conn: &Connection, query: &HistoryQuery) -> Result<Vec<CommandRecord>> {
     let mut sql = String::from(
-        "SELECT timestamp, session_id, command, exit_code, cwd, was_replaced, original_command
+        "SELECT timestamp, session_id, command, exit_code, cwd, was_replaced, original_command,
+                COALESCE(status, 'pending') as status
          FROM commands WHERE 1=1"
     );
 
@@ -102,7 +113,9 @@ pub fn query_history(conn: &Connection, query: &HistoryQuery) -> Result<Vec<Comm
     }
 
     if query.failures_only {
-        sql.push_str(" AND exit_code != 0");
+        // Failed commands are those with status='pending' (never completed)
+        // or with non-zero exit codes
+        sql.push_str(" AND (status = 'pending' OR exit_code != 0)");
     }
 
     if let Some(ref pattern) = query.command_pattern {
@@ -127,6 +140,7 @@ pub fn query_history(conn: &Connection, query: &HistoryQuery) -> Result<Vec<Comm
             cwd: row.get(4)?,
             was_replaced: row.get::<_, i32>(5)? != 0,
             original_command: row.get(6)?,
+            status: row.get(7)?,
         })
     })
     .context("Failed to execute query")?;
@@ -147,6 +161,7 @@ pub fn create_record(
     cwd: Option<&str>,
     was_replaced: bool,
     original_command: Option<&str>,
+    status: &str,
 ) -> CommandRecord {
     CommandRecord {
         timestamp: Utc::now().to_rfc3339(),
@@ -156,7 +171,37 @@ pub fn create_record(
         cwd: cwd.map(|s| s.to_string()),
         was_replaced,
         original_command: original_command.map(|s| s.to_string()),
+        status: status.to_string(),
     }
+}
+
+/// Update the status of the most recent pending command matching criteria
+pub fn update_command_status(
+    conn: &Connection,
+    session_id: &str,
+    command: &str,
+    new_status: &str,
+    exit_code: Option<i32>,
+) -> Result<bool> {
+    let rows_affected = conn.execute(
+        "UPDATE commands
+         SET status = ?1, exit_code = ?2
+         WHERE session_id = ?3
+         AND command = ?4
+         AND status = 'pending'
+         AND id = (
+             SELECT id FROM commands
+             WHERE session_id = ?3
+             AND command = ?4
+             AND status = 'pending'
+             ORDER BY timestamp DESC
+             LIMIT 1
+         )",
+        params![new_status, exit_code, session_id, command],
+    )
+    .context("Failed to update command status")?;
+
+    Ok(rows_affected > 0)
 }
 
 #[cfg(test)]
@@ -191,6 +236,7 @@ mod tests {
             Some("/home/user/project"),
             false,
             None,
+            "success",
         );
         log_command(&conn, &record).unwrap();
 
@@ -214,9 +260,9 @@ mod tests {
         let conn = init_database(&db_path).unwrap();
 
         // Log commands from different sessions
-        log_command(&conn, &create_record("session-1", "npm install", Some(0), None, false, None)).unwrap();
-        log_command(&conn, &create_record("session-2", "yarn build", Some(0), None, false, None)).unwrap();
-        log_command(&conn, &create_record("session-1", "npm test", Some(1), None, false, None)).unwrap();
+        log_command(&conn, &create_record("session-1", "npm install", Some(0), None, false, None, "success")).unwrap();
+        log_command(&conn, &create_record("session-2", "yarn build", Some(0), None, false, None, "success")).unwrap();
+        log_command(&conn, &create_record("session-1", "npm test", Some(1), None, false, None, "pending")).unwrap();
 
         // Query session-1 only
         let query = HistoryQuery {
@@ -236,9 +282,9 @@ mod tests {
         let conn = init_database(&db_path).unwrap();
 
         // Log successful and failed commands
-        log_command(&conn, &create_record("session-1", "npm install", Some(0), None, false, None)).unwrap();
-        log_command(&conn, &create_record("session-1", "npm test", Some(1), None, false, None)).unwrap();
-        log_command(&conn, &create_record("session-1", "npm build", Some(2), None, false, None)).unwrap();
+        log_command(&conn, &create_record("session-1", "npm install", Some(0), None, false, None, "success")).unwrap();
+        log_command(&conn, &create_record("session-1", "npm test", Some(1), None, false, None, "pending")).unwrap();
+        log_command(&conn, &create_record("session-1", "npm build", Some(2), None, false, None, "pending")).unwrap();
 
         // Query failures only
         let query = HistoryQuery {
@@ -258,9 +304,9 @@ mod tests {
         let conn = init_database(&db_path).unwrap();
 
         // Log various commands
-        log_command(&conn, &create_record("session-1", "git status", Some(0), None, false, None)).unwrap();
-        log_command(&conn, &create_record("session-1", "git commit", Some(0), None, false, None)).unwrap();
-        log_command(&conn, &create_record("session-1", "npm install", Some(0), None, false, None)).unwrap();
+        log_command(&conn, &create_record("session-1", "git status", Some(0), None, false, None, "success")).unwrap();
+        log_command(&conn, &create_record("session-1", "git commit", Some(0), None, false, None, "success")).unwrap();
+        log_command(&conn, &create_record("session-1", "npm install", Some(0), None, false, None, "success")).unwrap();
 
         // Query for git commands only
         let query = HistoryQuery {
@@ -287,6 +333,7 @@ mod tests {
             None,
             true,
             Some("npm install"),
+            "success",
         );
         log_command(&conn, &record).unwrap();
 
