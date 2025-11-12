@@ -378,6 +378,7 @@ fn create_smart_config(config_path: &str) -> Result<()> {
         commands,
         semantic_directories: std::collections::HashMap::new(), // Empty - will be comments only
         command_history: None, // Will be added as commented example
+        security_pattern_overrides: std::collections::HashMap::new(), // Empty - defaults are enabled
     };
     
     // Generate TOML content

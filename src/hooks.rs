@@ -3,7 +3,8 @@
 use crate::config::load_config;
 use crate::directory::detect_directory_references;
 use crate::history;
-use crate::types::{Config, HookInput, HookOutput};
+use crate::security::get_default_security_patterns;
+use crate::types::{Config, HookInput, HookOutput, SecurityPattern};
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -55,25 +56,38 @@ pub fn run_as_hook(config_path: &str, replace_mode: bool) -> Result<()> {
     Ok(())
 }
 
-/// Handles PreToolUse hook events for command mapping and replacement.
+/// Handles PreToolUse hook events for command mapping and security checking.
 ///
-/// Processes Bash commands, logs them as "pending", and checks for configured
-/// mappings. If a mapping is found, outputs JSON decision to block or replace
-/// the command.
+/// Processes Bash commands for command mappings, and Edit/Write/MultiEdit tools
+/// for security pattern detection. Logs Bash commands as "pending", and checks
+/// for configured mappings or security issues.
 ///
 /// # Arguments
-/// * `config` - Configuration containing command mappings
+/// * `config` - Configuration containing command mappings and security patterns
 /// * `hook_input` - Hook input data from Claude Code
 /// * `replace_mode` - Whether to replace or block commands
 ///
 /// # Returns
 /// * `Ok(())` - Processing completed (may exit process with JSON output)
-/// * `Err` - If command mapping check fails
+/// * `Err` - If command mapping or security check fails
 fn handle_pre_tool_use(config: &Config, hook_input: &HookInput, replace_mode: bool) -> Result<()> {
-    // Only process Bash commands
-    if hook_input.tool_name.as_deref() != Some("Bash") {
-        return Ok(());
+    let tool_name = hook_input.tool_name.as_deref();
+
+    // Handle Bash commands
+    if tool_name == Some("Bash") {
+        return handle_bash_tool(config, hook_input, replace_mode);
     }
+
+    // Handle file editing tools for security patterns
+    if matches!(tool_name, Some("Edit") | Some("Write") | Some("MultiEdit")) {
+        return handle_file_tool(config, hook_input);
+    }
+
+    Ok(())
+}
+
+/// Handles Bash tool for command mapping and replacement
+fn handle_bash_tool(config: &Config, hook_input: &HookInput, replace_mode: bool) -> Result<()> {
 
     let Some(tool_input) = &hook_input.tool_input else {
         return Ok(());
@@ -128,6 +142,93 @@ fn handle_pre_tool_use(config: &Config, hook_input: &HookInput, replace_mode: bo
     }
 
     Ok(())
+}
+
+/// Gets the list of enabled security patterns by merging defaults with overrides.
+///
+/// Default patterns are enabled unless explicitly disabled in the config.
+fn get_enabled_security_patterns(config: &Config) -> Vec<SecurityPattern> {
+    let defaults = get_default_security_patterns();
+
+    defaults
+        .into_iter()
+        .filter(|pattern| {
+            // Check if pattern is explicitly disabled
+            !matches!(
+                config.security_pattern_overrides.get(&pattern.rule_name),
+                Some(false)
+            )
+        })
+        .collect()
+}
+
+/// Handles file editing tools (Edit/Write/MultiEdit) for security pattern detection.
+///
+/// Checks file paths and content against configured security patterns to warn
+/// about potential security vulnerabilities before files are modified.
+///
+/// # Arguments
+/// * `config` - Configuration containing security pattern overrides
+/// * `hook_input` - Hook input data containing file editing parameters
+///
+/// # Returns
+/// * `Ok(())` - Processing completed (may exit process with blocking decision)
+/// * `Err` - If security pattern check fails
+fn handle_file_tool(config: &Config, hook_input: &HookInput) -> Result<()> {
+    // Get enabled security patterns (defaults with overrides applied)
+    let security_patterns = get_enabled_security_patterns(config);
+
+    let Some(tool_input) = &hook_input.tool_input else {
+        return Ok(());
+    };
+
+    let Some(file_path) = &tool_input.file_path else {
+        return Ok(());
+    };
+
+    // Extract content to check based on tool type
+    let content = extract_content_from_tool_input(hook_input.tool_name.as_deref(), tool_input);
+
+    // Check for security pattern matches
+    if let Some((rule_name, reminder)) = check_security_patterns(&security_patterns, file_path, &content)? {
+        // Check if we've already shown this warning in this session
+        if should_show_warning(&hook_input.session_id, file_path, &rule_name)? {
+            // Mark warning as shown
+            mark_warning_shown(&hook_input.session_id, file_path, &rule_name)?;
+
+            // Output blocking decision with security reminder
+            let output = HookOutput {
+                decision: "block".to_string(),
+                reason: reminder,
+                replacement_command: None,
+            };
+
+            println!("{}", serde_json::to_string(&output)?);
+            std::process::exit(0);
+        }
+    }
+
+    Ok(())
+}
+
+/// Extracts content to check from tool input based on tool type
+fn extract_content_from_tool_input(tool_name: Option<&str>, tool_input: &crate::types::ToolInput) -> String {
+    match tool_name {
+        Some("Write") => tool_input.content.clone().unwrap_or_default(),
+        Some("Edit") => tool_input.new_string.clone().unwrap_or_default(),
+        Some("MultiEdit") => {
+            if let Some(edits) = &tool_input.edits {
+                edits
+                    .iter()
+                    .map(|edit| edit.new_string.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            } else {
+                String::new()
+            }
+        }
+        _ => String::new(),
+    }
 }
 
 /// Handles UserPromptSubmit hook events for directory reference detection.
@@ -272,6 +373,118 @@ fn get_cached_regex(pattern: &str) -> Result<Regex> {
     Ok(regex)
 }
 
+/// Checks if a file path or content matches any security patterns.
+///
+/// Security patterns can match based on:
+/// 1. File path glob patterns (e.g., ".github/workflows/*.yml")
+/// 2. Content substring matching (e.g., "eval(", "dangerouslySetInnerHTML")
+///
+/// Returns the first matching pattern.
+///
+/// # Arguments
+/// * `patterns` - List of security patterns to check
+/// * `file_path` - The file path being edited
+/// * `content` - The content being written/edited
+///
+/// # Returns
+/// * `Ok(Some((rule_name, reminder)))` - If a pattern matches
+/// * `Ok(None)` - If no patterns match
+/// * `Err` - If pattern matching fails
+fn check_security_patterns(patterns: &[SecurityPattern], file_path: &str, content: &str) -> Result<Option<(String, String)>> {
+    // Normalize file path by removing leading slashes
+    let normalized_path = file_path.trim_start_matches('/');
+
+    for pattern in patterns {
+        // Check path-based patterns using glob matching
+        if let Some(path_pattern) = &pattern.path_pattern {
+            if glob_match(path_pattern, normalized_path)? {
+                return Ok(Some((pattern.rule_name.clone(), pattern.reminder.clone())));
+            }
+        }
+
+        // Check content-based patterns
+        if !pattern.content_substrings.is_empty() && !content.is_empty() {
+            for substring in &pattern.content_substrings {
+                if content.contains(substring) {
+                    return Ok(Some((pattern.rule_name.clone(), pattern.reminder.clone())));
+                }
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+/// Checks if a file path matches a glob pattern
+fn glob_match(pattern: &str, path: &str) -> Result<bool> {
+    // Simple glob matching supporting * and **
+    let regex_pattern = pattern
+        .replace(".", r"\.")
+        .replace("**", "DOUBLE_STAR")
+        .replace("*", "[^/]*")
+        .replace("DOUBLE_STAR", ".*");
+
+    let regex = get_cached_regex(&format!("^{}$", regex_pattern))?;
+    Ok(regex.is_match(path))
+}
+
+/// Checks if we should show a warning for the given session, file, and rule.
+///
+/// Returns true if the warning hasn't been shown yet in this session.
+fn should_show_warning(session_id: &str, file_path: &str, rule_name: &str) -> Result<bool> {
+    let state_file = get_security_state_file(session_id)?;
+
+    if !state_file.exists() {
+        return Ok(true);
+    }
+
+    let content = std::fs::read_to_string(&state_file)?;
+    let shown_warnings: std::collections::HashSet<String> =
+        serde_json::from_str(&content).unwrap_or_default();
+
+    let warning_key = format!("{}-{}", file_path, rule_name);
+    Ok(!shown_warnings.contains(&warning_key))
+}
+
+/// Marks a warning as shown for the given session, file, and rule.
+fn mark_warning_shown(session_id: &str, file_path: &str, rule_name: &str) -> Result<()> {
+    let state_file = get_security_state_file(session_id)?;
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = state_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Load existing warnings
+    let mut shown_warnings: std::collections::HashSet<String> = if state_file.exists() {
+        let content = std::fs::read_to_string(&state_file)?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    // Add new warning
+    let warning_key = format!("{}-{}", file_path, rule_name);
+    shown_warnings.insert(warning_key);
+
+    // Save updated warnings
+    let content = serde_json::to_string(&shown_warnings)?;
+    std::fs::write(&state_file, content)?;
+
+    Ok(())
+}
+
+/// Gets the path to the security state file for a given session
+fn get_security_state_file(session_id: &str) -> Result<PathBuf> {
+    let home = std::env::var("HOME")
+        .context("HOME environment variable not set")?;
+
+    Ok(PathBuf::from(format!(
+        "{}/.claude/security_warnings_state_{}.json",
+        home, session_id
+    )))
+}
+
 /// Checks if a command matches any configured mappings and generates suggestions.
 ///
 /// Only matches the primary command at the start of the line (e.g., "npm" matches
@@ -328,6 +541,7 @@ mod tests {
             commands,
             semantic_directories: HashMap::new(),
             command_history: None,
+            security_pattern_overrides: HashMap::new(),
         };
 
         // Test npm mapping
@@ -353,6 +567,7 @@ mod tests {
             commands,
             semantic_directories: HashMap::new(),
             command_history: None,
+            security_pattern_overrides: HashMap::new(),
         };
 
         // Test whitespace boundaries - "npm" in "my-npm-tool" should NOT match
@@ -393,6 +608,7 @@ mod tests {
             commands,
             semantic_directories: HashMap::new(),
             command_history: None,
+            security_pattern_overrides: HashMap::new(),
         };
 
         // Test exact match

@@ -156,3 +156,92 @@ log_file = "~/.claude-hook-advisor/bash-history.db"
 #   claude-hook-advisor --history --failures       # Show only failed commands
 #   claude-hook-advisor --history --pattern git    # Show git commands
 #   claude-hook-advisor --history --session <ID>   # Show specific session
+
+# ===== Security Pattern Detection =====
+# Security patterns are ENABLED BY DEFAULT to detect dangerous code patterns.
+# 27 built-in patterns cover vulnerabilities across 10+ programming languages.
+#
+# HOW IT WORKS:
+# - Patterns check file paths (e.g., .github/workflows/*.yml) and content (e.g., eval())
+# - When a match is found, Claude receives a security warning with safer alternatives
+# - Warnings are shown once per session to avoid noise
+#
+# LANGUAGES COVERED:
+#   JavaScript/TypeScript (7 patterns): eval, innerHTML, dangerouslySetInnerHTML, exec, etc.
+#   Python (4 patterns): eval, exec, pickle, os.system
+#   SQL (2 patterns): string interpolation, format injection
+#   Rust (2 patterns): unsafe blocks, command injection
+#   Go (2 patterns): command injection, SQL injection
+#   Swift (3 patterns): force unwrap (!), unsafe pointers, NSPredicate
+#   Java (2 patterns): Runtime.exec, deserialization
+#   PHP (2 patterns): eval, unserialize
+#   Ruby (2 patterns): eval variants, YAML.load
+#   GitHub Actions (2 patterns): workflow injection
+#
+# DISABLE PATTERNS ONLY IF NEEDED:
+# Most developers should keep all patterns enabled for maximum security.
+# Only disable patterns if they're too noisy for your specific workflow.
+#
+[security_pattern_overrides]
+# ===== JavaScript / TypeScript =====
+# eval_injection = false                  # Disable eval() warnings
+# new_function_injection = false          # Disable new Function() warnings
+# innerHTML_xss = false                   # Disable innerHTML warnings
+# react_dangerously_set_html = false      # Disable dangerouslySetInnerHTML warnings
+# document_write_xss = false              # Disable document.write() warnings
+# child_process_exec = false              # Disable exec()/execSync() warnings
+
+# ===== Python =====
+# python_eval = false                     # Disable eval() warnings
+# python_exec = false                     # Disable exec() warnings
+# pickle_deserialization = false          # Disable pickle.load warnings (common in ML/data science)
+# os_system_injection = false             # Disable os.system() warnings
+
+# ===== SQL =====
+# sql_injection = false                   # Disable SQL string interpolation warnings
+# sql_string_format = false               # Disable format() in SQL warnings
+
+# ===== Rust =====
+# rust_unsafe_block = false               # Disable unsafe {} warnings (common in systems programming)
+# rust_command_injection = false          # Disable shell command warnings
+
+# ===== Go =====
+# go_command_injection = false            # Disable shell command warnings
+# go_sql_injection = false                # Disable fmt.Sprintf in SQL warnings
+
+# ===== Swift =====
+# swift_force_unwrap = false              # Disable ! force unwrap warnings (very common in Swift)
+# swift_unsafe_operations = false         # Disable unsafe pointer warnings
+# swift_nspredicate_format = false        # Disable NSPredicate injection warnings
+
+# ===== Java =====
+# java_runtime_exec = false               # Disable Runtime.exec() warnings
+# java_deserialization = false            # Disable ObjectInputStream warnings
+
+# ===== PHP =====
+# php_eval = false                        # Disable eval() warnings
+# php_unserialize = false                 # Disable unserialize() warnings
+
+# ===== Ruby =====
+# ruby_eval = false                       # Disable eval/instance_eval/class_eval warnings
+# ruby_yaml_load = false                  # Disable YAML.load warnings
+
+# ===== GitHub Actions =====
+# github_actions_workflow = false         # Disable .yml workflow warnings
+# github_actions_workflow_yaml = false    # Disable .yaml workflow warnings
+
+# ===== EXAMPLE USE CASES =====
+#
+# Swift/iOS Development (force unwrap is common):
+#   swift_force_unwrap = false
+#
+# Building a REPL/Interpreter (needs eval):
+#   eval_injection = false
+#   python_eval = false
+#   ruby_eval = false
+#
+# Systems Programming (needs unsafe):
+#   rust_unsafe_block = false
+#
+# Data Science/ML (uses pickle):
+#   pickle_deserialization = false

@@ -539,6 +539,301 @@ git add .claude-hook-advisor.toml
 echo '.claude-hook-advisor.toml' >> .gitignore
 ```
 
+## 🔒 Security Pattern Configuration
+
+### Overview
+
+Claude Hook Advisor includes **27 built-in security patterns** that are **enabled by default**. These patterns detect dangerous code patterns when Claude edits files, covering vulnerabilities across 10+ programming languages.
+
+### How Security Patterns Work
+
+Security patterns check two things:
+1. **File paths** using glob patterns (e.g., `.github/workflows/*.yml`)
+2. **File content** using substring matching (e.g., `eval(`, `pickle.loads`)
+
+When a pattern matches, the operation is **blocked** and Claude receives a security warning explaining the risk and suggesting safer alternatives.
+
+### Default Behavior (No Configuration Needed)
+
+All 27 security patterns are enabled by default. You don't need any configuration - they work out of the box:
+
+```toml
+# No configuration needed! Security patterns are automatically enabled.
+```
+
+### Disabling Patterns
+
+If a pattern is too noisy for your workflow, disable it by setting it to `false`:
+
+```toml
+[security_pattern_overrides]
+# Disable Swift force unwrap warnings (common in Swift projects)
+swift_force_unwrap = false
+
+# Disable eval warnings (if building a REPL/interpreter)
+eval_injection = false
+python_eval = false
+ruby_eval = false
+
+# Disable unsafe warnings (if doing low-level systems programming)
+rust_unsafe_block = false
+```
+
+### Built-in Security Patterns Reference
+
+#### JavaScript / TypeScript (7 patterns)
+
+```toml
+[security_pattern_overrides]
+eval_injection = false                  # Detects eval() usage
+new_function_injection = false          # Detects new Function() usage
+innerHTML_xss = false                   # Detects innerHTML assignment
+react_dangerously_set_html = false      # Detects dangerouslySetInnerHTML
+document_write_xss = false              # Detects document.write()
+child_process_exec = false              # Detects exec()/execSync()
+```
+
+**What they detect:**
+- `eval()` - Arbitrary code execution
+- `new Function()` - Dynamic code generation
+- `.innerHTML =` - XSS vulnerabilities
+- `dangerouslySetInnerHTML` - React XSS risks
+- `document.write()` - XSS attacks and performance issues
+- `child_process.exec` - Command injection via shell
+
+#### Python (4 patterns)
+
+```toml
+[security_pattern_overrides]
+python_eval = false                     # Detects eval() usage
+python_exec = false                     # Detects exec() usage
+pickle_deserialization = false          # Detects pickle.load/loads
+os_system_injection = false             # Detects os.system() usage
+```
+
+**What they detect:**
+- `eval()` - Arbitrary code execution
+- `exec()` - Arbitrary code execution
+- `pickle.load()` / `pickle.loads()` - Unsafe deserialization
+- `os.system()` - Command injection
+
+#### SQL (2 patterns)
+
+```toml
+[security_pattern_overrides]
+sql_injection = false                   # Detects SQL string interpolation
+sql_string_format = false               # Detects format() in SQL queries
+```
+
+**What they detect:**
+- `execute(f"SELECT...")` - String interpolation in SQL
+- `query(format!(...))` - Rust format! in SQL queries
+
+#### Rust (2 patterns)
+
+```toml
+[security_pattern_overrides]
+rust_unsafe_block = false               # Detects unsafe {} blocks
+rust_command_injection = false          # Detects shell command usage
+```
+
+**What they detect:**
+- `unsafe {}` - Bypasses Rust's safety guarantees
+- `Command::new("sh")` - Shell command injection risks
+
+#### Go (2 patterns)
+
+```toml
+[security_pattern_overrides]
+go_command_injection = false            # Detects shell command usage
+go_sql_injection = false                # Detects fmt.Sprintf in SQL
+```
+
+**What they detect:**
+- `exec.Command("sh", ...)` - Command injection
+- `db.Query(fmt.Sprintf(...))` - SQL injection
+
+#### Swift (3 patterns)
+
+```toml
+[security_pattern_overrides]
+swift_force_unwrap = false              # Detects ! force unwrap
+swift_unsafe_operations = false         # Detects unsafe pointers
+swift_nspredicate_format = false        # Detects NSPredicate injection
+```
+
+**What they detect:**
+- `optional!` - Force unwrap that can crash
+- `UnsafeMutablePointer` - Memory safety bypasses
+- `NSPredicate(format:...)` - Injection vulnerabilities
+
+#### Java (2 patterns)
+
+```toml
+[security_pattern_overrides]
+java_runtime_exec = false               # Detects Runtime.exec()
+java_deserialization = false            # Detects ObjectInputStream
+```
+
+**What they detect:**
+- `Runtime.getRuntime().exec()` - Command injection
+- `ObjectInputStream` / `readObject()` - Unsafe deserialization
+
+#### PHP (2 patterns)
+
+```toml
+[security_pattern_overrides]
+php_eval = false                        # Detects eval() usage
+php_unserialize = false                 # Detects unserialize() usage
+```
+
+**What they detect:**
+- `eval()` - Arbitrary code execution
+- `unserialize()` - Object injection attacks
+
+#### Ruby (2 patterns)
+
+```toml
+[security_pattern_overrides]
+ruby_eval = false                       # Detects eval/instance_eval/class_eval
+ruby_yaml_load = false                  # Detects YAML.load usage
+```
+
+**What they detect:**
+- `eval()` / `instance_eval()` / `class_eval()` - Code execution
+- `YAML.load()` - Arbitrary code execution (use `YAML.safe_load`)
+
+#### GitHub Actions (2 patterns)
+
+```toml
+[security_pattern_overrides]
+github_actions_workflow = false         # Detects .yml workflow files
+github_actions_workflow_yaml = false    # Detects .yaml workflow files
+```
+
+**What they detect:**
+- `.github/workflows/*.yml` files - Workflow injection risks
+- `.github/workflows/*.yaml` files - Workflow injection risks
+
+### Configuration Examples by Use Case
+
+#### Web Development (React/Node.js)
+```toml
+[security_pattern_overrides]
+# Keep most security warnings enabled
+# Only disable if you have specific needs
+```
+
+Most web developers should keep all patterns enabled for maximum security.
+
+#### Systems Programming (Rust/C++)
+```toml
+[security_pattern_overrides]
+# Disable unsafe warnings if working on low-level code
+rust_unsafe_block = false
+```
+
+#### Swift/iOS Development
+```toml
+[security_pattern_overrides]
+# Force unwrap is common in Swift, might be too noisy
+swift_force_unwrap = false
+```
+
+#### Building Developer Tools (REPL, Interpreters)
+```toml
+[security_pattern_overrides]
+# Disable eval warnings if building tools that need dynamic code
+eval_injection = false
+python_eval = false
+ruby_eval = false
+new_function_injection = false
+```
+
+#### Data Science / Jupyter Notebooks
+```toml
+[security_pattern_overrides]
+# pickle is common in ML/data science workflows
+pickle_deserialization = false
+```
+
+### Pattern State Management
+
+Security warnings are **session-scoped**:
+- Each warning is shown **once per session** per file+pattern combination
+- State is tracked in `~/.claude/security_warnings_state_{session_id}.json`
+- When a session ends, you'll see warnings again in new sessions
+- State files are automatically cleaned up after 30 days
+
+### How Warnings Appear
+
+When Claude tries to write dangerous code, you'll see:
+
+```
+⚠️ Security Warning: eval() executes arbitrary code and is a major security risk.
+
+Consider using JSON.parse() for data parsing or alternative design patterns that
+don't require code evaluation. Only use eval() if you truly need to evaluate
+arbitrary code.
+```
+
+Claude will then:
+- Look for a safer alternative
+- Ask if you want to proceed anyway
+- Explain why the dangerous pattern might be necessary
+
+### Testing Security Patterns
+
+You can test security pattern detection:
+
+```bash
+# Create a test file with dangerous code
+echo 'const data = eval(userInput)' > test.js
+
+# Simulate Claude editing the file
+echo '{
+  "session_id": "test",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "test.js",
+    "content": "const data = eval(userInput)"
+  }
+}' | claude-hook-advisor --hook
+
+# You should see the security warning
+```
+
+### Viewing All Pattern Names
+
+All 27 pattern names for the `[security_pattern_overrides]` section:
+
+```
+github_actions_workflow          github_actions_workflow_yaml
+eval_injection                   new_function_injection
+react_dangerously_set_html       document_write_xss
+innerHTML_xss                    child_process_exec
+pickle_deserialization           os_system_injection
+python_eval                      python_exec
+sql_injection                    sql_string_format
+rust_unsafe_block                rust_command_injection
+go_command_injection             go_sql_injection
+swift_force_unwrap               swift_unsafe_operations
+swift_nspredicate_format         java_runtime_exec
+java_deserialization             php_eval
+php_unserialize                  ruby_eval
+ruby_yaml_load
+```
+
+### Benefits of Built-in Patterns
+
+1. **Zero Configuration**: Security warnings work immediately, no setup needed
+2. **Comprehensive Coverage**: 10+ languages and 27+ vulnerability types
+3. **Low Noise**: Warnings shown once per session
+4. **Educational**: Learn about security as you code
+5. **Easy Customization**: Disable specific patterns with one line
+6. **Always Updated**: Pattern updates don't require config changes
+
 ## 🎯 Best Practices
 
 1. **Start Simple**: Begin with basic mappings and add complexity gradually
@@ -546,6 +841,8 @@ echo '.claude-hook-advisor.toml' >> .gitignore
 3. **Document Choices**: Comment your configuration for team members
 4. **Use Consistent Patterns**: Establish team conventions for mappings
 5. **Regular Updates**: Review and update configurations as tools evolve
+6. **Security First**: Keep security patterns enabled unless you have a specific reason to disable them
+7. **Review Warnings**: Don't automatically disable patterns - consider why they're triggering
 
 ---
 
@@ -554,4 +851,4 @@ echo '.claude-hook-advisor.toml' >> .gitignore
 - [Learn best practices](best-practices.md)
 - [Set up Claude Code integration](claude-integration.md)
 
-#configuration #toml #commands #mapping #setup
+#configuration #toml #commands #mapping #setup #security
