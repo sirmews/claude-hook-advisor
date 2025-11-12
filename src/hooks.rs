@@ -4,7 +4,7 @@ use crate::config::load_config;
 use crate::directory::detect_directory_references;
 use crate::history;
 use crate::security::get_default_security_patterns;
-use crate::types::{Config, HookInput, HookOutput, SecurityPattern};
+use crate::types::{Config, HookInput, HookOutput, ModernHookResponse, SecurityPattern};
 use anyhow::{Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -124,17 +124,14 @@ fn handle_bash_tool(config: &Config, hook_input: &HookInput, replace_mode: bool)
     // Check for command mappings
     if let Some((suggestion, replacement_cmd)) = check_command_mappings(config, command)? {
         let output = if replace_mode {
-            HookOutput {
-                decision: "replace".to_string(),
-                reason: format!("Command mapped: using '{replacement_cmd}' instead"),
-                replacement_command: Some(replacement_cmd),
-            }
+            // Use new API format for command replacement
+            ModernHookResponse::deny_with_replacement(
+                format!("Command mapped: using '{replacement_cmd}' instead"),
+                replacement_cmd,
+            )
         } else {
-            HookOutput {
-                decision: "block".to_string(),
-                reason: suggestion,
-                replacement_command: None,
-            }
+            // Use new API format for command blocking with suggestion
+            ModernHookResponse::deny_with_replacement(suggestion, replacement_cmd)
         };
 
         println!("{}", serde_json::to_string(&output)?);
@@ -664,5 +661,30 @@ mod tests {
         assert!(json.contains("\"reason\":\"No mapping found\""));
         // Should not include replacement_command field when None due to serde skip
         assert!(!json.contains("replacement_command"));
+    }
+
+    #[test]
+    fn test_modern_hook_output_serialization() {
+        use crate::types::ModernHookResponse;
+
+        // Test deny with replacement command (new API)
+        let output = ModernHookResponse::deny_with_replacement(
+            "Command 'npm' is mapped to 'bun' instead".to_string(),
+            "bun install".to_string(),
+        );
+
+        let json = serde_json::to_string(&output).unwrap();
+        assert!(json.contains("\"hook_specific_output\""));
+        assert!(json.contains("\"hook_event_name\":\"PreToolUse\""));
+        assert!(json.contains("\"permission_decision\":\"deny\""));
+        assert!(json.contains("\"permission_decision_reason\":\"Command 'npm' is mapped to 'bun' instead\""));
+        assert!(json.contains("\"updated_input\""));
+        assert!(json.contains("\"command\":\"bun install\""));
+
+        // Test allow response
+        let output = ModernHookResponse::allow();
+        let json = serde_json::to_string(&output).unwrap();
+        assert!(json.contains("\"permission_decision\":\"allow\""));
+        assert!(json.contains("\"permission_decision_reason\":\"Command allowed\""));
     }
 }

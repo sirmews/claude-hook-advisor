@@ -1,0 +1,3 @@
+[commands]
+npm = "bun"
+yarn = "bun"

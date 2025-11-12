@@ -120,7 +120,7 @@ pub struct EditOperation {
 }
 
 /// Response data sent back to Claude Code hook system.
-/// 
+///
 /// This struct represents the JSON response that tells Claude Code whether
 /// to block the command and provides suggestions or replacements.
 #[derive(Debug, Serialize)]
@@ -129,6 +129,67 @@ pub struct HookOutput {
     pub reason: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub replacement_command: Option<String>,
+}
+
+/// Modern API response for PreToolUse hooks with new format
+#[derive(Debug, Serialize)]
+pub struct HookSpecificOutput {
+    pub hook_event_name: String,
+    pub permission_decision: String,
+    pub permission_decision_reason: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_input: Option<UpdatedInput>,
+}
+
+/// Updated input data for modified tool calls
+#[derive(Debug, Serialize)]
+pub struct UpdatedInput {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+}
+
+/// Modern API response wrapper for PreToolUse hooks
+#[derive(Debug, Serialize)]
+pub struct ModernHookResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hook_specific_output: Option<HookSpecificOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub continue_field: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_reason: Option<String>,
+}
+
+/// Helper functions for creating modern API responses
+impl ModernHookResponse {
+    /// Create a deny response with replacement command (maintains existing behavior)
+    pub fn deny_with_replacement(decision_reason: String, replacement_command: String) -> Self {
+        ModernHookResponse {
+            hook_specific_output: Some(HookSpecificOutput {
+                hook_event_name: "PreToolUse".to_string(),
+                permission_decision: "deny".to_string(),
+                permission_decision_reason: decision_reason,
+                updated_input: Some(UpdatedInput {
+                    command: Some(replacement_command),
+                }),
+            }),
+            continue_field: None,
+            stop_reason: None,
+        }
+    }
+
+    /// Create an allow response (for compatibility)
+    pub fn allow() -> Self {
+        ModernHookResponse {
+            hook_specific_output: Some(HookSpecificOutput {
+                hook_event_name: "PreToolUse".to_string(),
+                permission_decision: "allow".to_string(),
+                permission_decision_reason: "Command allowed".to_string(),
+                updated_input: None,
+            }),
+            continue_field: None,
+            stop_reason: None,
+        }
+    }
 }
 
 /// Result of directory resolution operation.
