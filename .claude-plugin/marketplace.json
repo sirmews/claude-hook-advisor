@@ -1,0 +1,38 @@
+{
+  "name": "claude-hook-advisor-marketplace",
+  "description": "Official marketplace for Claude Hook Advisor plugin - intelligent command history tracking with automatic failure detection",
+  "version": "1.0.0",
+  "owner": {
+    "name": "sirmews",
+    "url": "https://github.com/sirmews"
+  },
+  "pluginRoot": "./plugin",
+  "plugins": [
+    {
+      "name": "claude-hook-advisor",
+      "description": "Intelligent command history tracking with automatic failure detection. Tracks all bash commands Claude runs (successful and failed) with semantic directory aliasing and command mapping.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sirmews",
+        "url": "https://github.com/sirmews/claude-hook-advisor"
+      },
+      "homepage": "https://github.com/sirmews/claude-hook-advisor",
+      "repository": {
+        "type": "git",
+        "url": "https://github.com/sirmews/claude-hook-advisor"
+      },
+      "license": "MIT",
+      "keywords": [
+        "bash",
+        "history",
+        "command-tracking",
+        "debugging",
+        "hooks",
+        "automation",
+        "failure-detection"
+      ],
+      "category": "developer-tools",
+      "source": "./plugin"
+    }
+  ]
+}

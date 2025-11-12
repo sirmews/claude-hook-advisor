@@ -58,6 +58,23 @@ Behind the scenes, you'll see:
 
 ## Installation
 
+### Claude Code Plugin Marketplace (Easiest)
+
+The fastest way to get started is via the Claude Code plugin marketplace:
+
+```
+/plugin marketplace add sirmews/claude-hook-advisor
+/plugin install claude-hook-advisor@sirmews
+```
+
+Then restart Claude Code. See [MARKETPLACE.md](MARKETPLACE.md) for complete details.
+
+**What you get:**
+- ✅ Automatic hook setup - No manual configuration
+- ✅ Slash commands - `/history`, `/history-failures`, `/history-search`
+- ✅ One-command installation
+- ✅ Easy team distribution
+
 ### From crates.io (Recommended)
 
 Install directly from crates.io using cargo:
