@@ -133,6 +133,7 @@ pub struct HookOutput {
 
 /// Modern API response for PreToolUse hooks with new format
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HookSpecificOutput {
     pub hook_event_name: String,
     pub permission_decision: String,
@@ -150,14 +151,17 @@ pub struct UpdatedInput {
 
 /// Modern API response wrapper for PreToolUse hooks
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModernHookResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hook_specific_output: Option<HookSpecificOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub continue_field: Option<bool>,
+    pub r#continue: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stop_reason: Option<String>,
 }
+
+
 
 /// Helper functions for creating modern API responses
 impl ModernHookResponse {
@@ -172,7 +176,7 @@ impl ModernHookResponse {
                     command: Some(replacement_command),
                 }),
             }),
-            continue_field: None,
+            r#continue: None,
             stop_reason: None,
         }
     }
@@ -186,9 +190,49 @@ impl ModernHookResponse {
                 permission_decision_reason: "Command allowed".to_string(),
                 updated_input: None,
             }),
-            continue_field: None,
+            r#continue: None,
             stop_reason: None,
         }
+    }
+    
+    /// Create the correct JSON output manually for Claude Code API
+    pub fn to_correct_json(&self) -> Result<String, serde_json::Error> {
+        let mut output = serde_json::Map::new();
+        
+        if let Some(hook_output) = &self.hook_specific_output {
+            let mut hook_specific = serde_json::Map::new();
+            hook_specific.insert("hookEventName".to_string(), 
+                serde_json::Value::String(hook_output.hook_event_name.clone()));
+            hook_specific.insert("permissionDecision".to_string(), 
+                serde_json::Value::String(hook_output.permission_decision.clone()));
+            hook_specific.insert("permissionDecisionReason".to_string(), 
+                serde_json::Value::String(hook_output.permission_decision_reason.clone()));
+            
+            if let Some(updated) = &hook_output.updated_input {
+                let mut updated_input = serde_json::Map::new();
+                if let Some(cmd) = &updated.command {
+                    updated_input.insert("command".to_string(), 
+                        serde_json::Value::String(cmd.clone()));
+                }
+                hook_specific.insert("updatedInput".to_string(), 
+                    serde_json::Value::Object(updated_input));
+            }
+            
+            output.insert("hookSpecificOutput".to_string(), 
+                serde_json::Value::Object(hook_specific));
+        }
+        
+        if let Some(cont) = self.r#continue {
+            output.insert("continue".to_string(), 
+                serde_json::Value::Bool(cont));
+        }
+        
+        if let Some(reason) = &self.stop_reason {
+            output.insert("stopReason".to_string(), 
+                serde_json::Value::String(reason.clone()));
+        }
+        
+        serde_json::to_string(&serde_json::Value::Object(output))
     }
 }
 

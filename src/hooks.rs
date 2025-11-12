@@ -134,7 +134,7 @@ fn handle_bash_tool(config: &Config, hook_input: &HookInput, replace_mode: bool)
             ModernHookResponse::deny_with_replacement(suggestion, replacement_cmd)
         };
 
-        println!("{}", serde_json::to_string(&output)?);
+        println!("{}", output.to_correct_json()?);
         std::process::exit(0);
     }
 
