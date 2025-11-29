@@ -1,98 +1,47 @@
 # Claude Hook Advisor
 
-A Rust CLI tool that integrates with Claude Code using a **triple-hook architecture** to provide intelligent command suggestions and semantic directory aliasing. Enhance your development workflow with automatic command mapping and natural language directory references.
-
-## 🎬 What You'll Experience
-
-Once installed, claude-hook-advisor works invisibly in your Claude Code conversations:
-
-### Directory Aliasing Magic ✨
-**You type:** *"What files are in my docs?"*
-**Claude responds:** *"I'll check what files are in your docs directory at /Users/you/Documents/Documentation."*
-
-Behind the scenes, you'll see:
-```
-<user-prompt-submit-hook>Directory reference 'docs' resolved to: /Users/you/Documents/Documentation</user-prompt-submit-hook>
-```
-
-**You type:** *"Check the project_docs for API documentation"*
-**Claude automatically knows:** *Uses `/Users/you/Documents/Documentation/my-project/` without you typing the full path*
-
-### Command Intelligence in Action 🚀
-**Claude tries to run:** `npm install`
-**Tool intervenes:** *Suggests `bun install` based on your configuration*
-**Claude automatically runs:** `bun install` *with no manual intervention*
-
-**You see:** Claude seamlessly uses your preferred tools without you having to correct it every time.
-
-### The Magic is Invisible
-- No extra commands to remember
-- No interruptions to your workflow  
-- Natural language directory references just work
-- Your preferred tools are used automatically
-- All happens transparently in Claude Code conversations
+A Rust CLI tool that integrates with Claude Code using hooks to provide intelligent command suggestions, semantic directory aliasing, command history tracking, and security pattern detection.
 
 ## Features
 
-### 🎯 Command Intelligence
-- **Smart command mapping**: Map any command to preferred alternatives with regex support
-- **Per-project configuration**: Each project can have its own `.claude-hook-advisor.toml` file
-- **Triple-hook integration**: PreToolUse, UserPromptSubmit, and PostToolUse hooks
+- **🎯 Command Intelligence** - Automatically map commands to your preferred alternatives (npm → bun, curl → wget)
+- **📁 Directory Aliasing** - Use natural language like "docs" or "project_docs" instead of typing full paths
+- **📊 Command History** - Track all commands Claude runs in a SQLite database with session tracking
+- **🔒 Security Patterns** - 27 built-in patterns detect dangerous code across 10+ languages
+- **⚡ Fast & Lightweight** - Rust-based with ~1-5ms hook response time
 
-### 📁 Semantic Directory Aliasing
-- **Natural language directory references**: Use "docs", "central_docs", "project_docs" in conversations
-- **Simple path mapping**: Direct alias-to-path mapping with tilde expansion
-- **Automatic resolution**: Claude Code automatically resolves semantic references to canonical paths
-- **TOML configuration**: Simple configuration file-based setup
+### Quick Example
 
-### 📊 Command History Tracking
-- **Persistent Bash history**: All commands Claude runs are logged to SQLite database
-- **Never lose a command**: Commands run by Claude don't appear in your shell history, but now you can retrieve them
-- **Powerful querying**: Filter by session, command pattern, exit code, or time range
-- **Audit trail**: Track what Claude actually executed for debugging and compliance
+**You:** *"What files are in my docs?"*
+**Claude:** *"I'll check your docs directory at /Users/you/Documents/Documentation"*
 
-### 🔒 Security Pattern Detection
-- **27 built-in security patterns**: Detect dangerous code patterns across 10+ languages
-- **Enabled by default**: Comprehensive security warnings out of the box, no configuration needed
-- **Multi-language coverage**: JavaScript/TypeScript, Python, SQL, Rust, Go, Swift, Java, PHP, Ruby
-- **Session-scoped warnings**: Each warning shown once per session to avoid noise
-- **Easy customization**: Disable specific patterns if too noisy for your workflow
+**Claude tries:** `npm install`
+**Tool suggests:** `bun install`
+**Claude runs:** `bun install` automatically
 
-### 🚀 Performance & Security
-- **Fast and lightweight**: Built in Rust for optimal performance
-- **Path canonicalization**: Security against directory traversal attacks
-- **Graceful error handling**: Robust fallback mechanisms
+**Claude tries to write:** `eval(userInput)`
+**Tool warns:** Security risk detected
+**Claude:** Finds a safer alternative
 
 ## Installation
 
-### Claude Code Plugin Marketplace (Easiest)
+### Option 1: Plugin Marketplace (Recommended)
 
-The fastest way to get started is via the Claude Code plugin marketplace:
-
-```
+```bash
 /plugin marketplace add sirmews/claude-hook-advisor
 /plugin install claude-hook-advisor@sirmews
 ```
 
-Then restart Claude Code. See [MARKETPLACE.md](MARKETPLACE.md) for complete details.
+Includes automatic hook setup and slash commands (`/history`, `/history-failures`, `/history-search`).
 
-**What you get:**
-- ✅ Automatic hook setup - No manual configuration
-- ✅ Slash commands - `/history`, `/history-failures`, `/history-search`
-- ✅ One-command installation
-- ✅ Easy team distribution
-
-### From crates.io (Recommended)
-
-Install directly from crates.io using cargo:
+### Option 2: From crates.io
 
 ```bash
 cargo install claude-hook-advisor
+claude-hook-advisor --install-hooks
 ```
 
-This installs the binary to `~/.cargo/bin/claude-hook-advisor` (make sure `~/.cargo/bin` is in your PATH).
-
-### From Source
+### Option 3: From Source
 
 ```bash
 git clone https://github.com/sirmews/claude-hook-advisor.git
@@ -100,83 +49,30 @@ cd claude-hook-advisor
 make install
 ```
 
-### Claude Code Plugin (Easiest)
-
-The easiest way to use claude-hook-advisor is via the **Claude Code Plugin**, which bundles hooks and slash commands together:
-
-```bash
-# 1. Install the binary first
-cargo install claude-hook-advisor
-
-# 2. Install the plugin
-cd claude-hook-advisor
-./plugin/install.sh
-```
-
-**Benefits:**
-- ✅ **One-command installation** - Automatic hook setup
-- ✅ **Built-in slash commands** - `/history`, `/history-failures`, `/history-search`
-- ✅ **Team sharing** - Easy to distribute to team members
-- ✅ **Auto-configured** - Works out of the box
-
-**Available slash commands:**
-- `/history` - View recent command history with AI analysis
-- `/history-failures` - Show only failed commands with suggested fixes
-- `/history-search <pattern>` - Search for specific commands
-- `/history-session <id>` - View complete session timeline
-
-See [plugin/README.md](plugin/README.md) for detailed plugin documentation.
-
 ## Quick Start
 
-### 1. Install and Configure Hooks
-```bash
-# Install the binary
-cargo install claude-hook-advisor
-
-# Automatically install hooks into Claude Code (creates backups)
-claude-hook-advisor --install-hooks
-
-# Remove hooks if needed (with backup)
-claude-hook-advisor --uninstall-hooks
-```
-
-### 2. Configure Directory Aliases
-Edit your `.claude-hook-advisor.toml` file to set up directory aliases:
+1. Install via plugin marketplace (recommended) or cargo
+2. Create `.claude-hook-advisor.toml` in your project root:
 
 ```toml
-# Semantic directory aliases - use natural language!
-[semantic_directories]
-"project docs" = "~/Documents/Documentation/my-project"
-"central docs" = "~/Documents/Documentation" 
-"claude docs" = "~/Documents/Documentation/claude"
-"test data" = "~/Documents/test-data"
-```
-
-**Pro tip:** Use quoted, space-separated aliases for natural conversation:
-- *"Check the project docs folder"* → matches `"project docs"`
-- *"Look in test data directory"* → matches `"test data"`
-
-### 3. Configure Command Mappings
-Create a `.claude-hook-advisor.toml` file in your project root:
-
-```toml
-# Command mappings
+# Command mappings - map any command to your preferred tool
 [commands]
 npm = "bun"
 yarn = "bun"
-npx = "bunx"
 curl = "wget --verbose"
 
-# Semantic directory aliases - natural language
+# Directory aliases - use natural language in conversations
 [semantic_directories]
-"project docs" = "~/Documents/Documentation/my-project"
-"central docs" = "~/Documents/Documentation"
-"claude docs" = "~/Documents/Documentation/claude"
+"project docs" = "~/Documents/my-project/docs"
+"test data" = "~/Documents/test-data"
 ```
 
-### 4. (Optional) Enable Command History Tracking
-Track all commands Claude runs to a SQLite database:
+That's it! Start a Claude Code conversation and the hooks work automatically. Security patterns are enabled by default with no configuration needed.
+
+<details>
+<summary><b>📝 Optional: Enable Command History Tracking</b></summary>
+
+Add to your `.claude-hook-advisor.toml`:
 
 ```toml
 [command_history]
@@ -184,68 +80,32 @@ enabled = true
 log_file = "~/.claude-hook-advisor/bash-history.db"
 ```
 
-Then view history anytime with: `claude-hook-advisor --history`
+View history:
+```bash
+claude-hook-advisor --history               # Recent commands
+claude-hook-advisor --history --failures    # Only failed commands
+claude-hook-advisor --history --pattern git # Filter by pattern
+```
 
-See the [Command History Tracking](#command-history-tracking) section for full details.
+</details>
 
-### 5. Security Patterns (Built-in, Enabled by Default)
-Security patterns are **automatically enabled** and require no configuration. They detect dangerous code patterns like:
+<details>
+<summary><b>🔒 Optional: Disable Noisy Security Patterns</b></summary>
 
-- **JavaScript/TypeScript**: `eval()`, `dangerouslySetInnerHTML`, command injection
-- **Python**: `eval()`, `pickle`, `os.system()`
-- **SQL**: String interpolation, format injection
-- **Rust**: `unsafe` blocks, shell commands
-- **Go, Swift, Java, PHP, Ruby**: Language-specific vulnerabilities
+Security patterns are enabled by default. To disable specific patterns:
 
-**To disable noisy patterns:**
 ```toml
 [security_pattern_overrides]
-swift_force_unwrap = false  # Disable if too noisy
-eval_injection = false      # Disable if you intentionally use eval
+swift_force_unwrap = false      # Common in Swift code
+eval_injection = false          # If working on a REPL
+rust_unsafe_block = false       # For systems programming
 ```
 
-See the [Security Pattern Detection](#security-pattern-detection) section for full details.
+</details>
 
-### Example Configurations
+## Configuration
 
-**Node.js project (prefer bun):**
-```toml
-[commands]
-npm = "bun"
-yarn = "bun"
-npx = "bunx"
-```
-
-**Python project (prefer uv):**
-```toml
-[commands]
-pip = "uv pip"
-"pip install" = "uv add"
-```
-
-**General preferences:**
-```toml
-[commands]
-curl = "wget --verbose"
-cat = "bat"
-ls = "eza"
-```
-
-## Claude Code Integration
-
-### Automatic Installation (Recommended)
-```bash
-claude-hook-advisor --install-hooks
-```
-
-This automatically configures all three hooks:
-- **PreToolUse**: Command suggestion and blocking
-- **UserPromptSubmit**: Directory reference detection  
-- **PostToolUse**: Analytics and execution tracking
-
-### Manual Configuration
-
-If you prefer manual setup, add to your `.claude/settings.json`:
+Run `claude-hook-advisor --install-hooks` to automatically configure hooks, or manually add to `.claude/settings.json`:
 
 ```json
 {
@@ -257,43 +117,34 @@ If you prefer manual setup, add to your `.claude/settings.json`:
 }
 ```
 
-**Note**: This assumes `claude-hook-advisor` is in your PATH. After `cargo install`, the binary is typically located at `~/.cargo/bin/claude-hook-advisor`.
+---
 
-## How It Works
+## 📚 Documentation
 
-### Command Intelligence (PreToolUse Hook) 🚦
+<details>
+<summary><b>How It Works</b></summary>
+
+### Triple-Hook Architecture
+
+Three hooks work together to provide comprehensive functionality:
+
+#### 1. PreToolUse Hook - Command Intelligence 🚦
 
 **The Flow:**
 1. **Command Detection**: When Claude Code tries to run a Bash command, the hook receives JSON input
 2. **Configuration Loading**: The tool loads `.claude-hook-advisor.toml` from the current directory
-3. **Pattern Matching**: Matches only the primary command at the start of the line (e.g., `npm` matches `npm install` but not `npx npm` or `my-npm-tool`)
+3. **Pattern Matching**: Matches only the primary command at the start of the line
 4. **Suggestion Generation**: If a match is found, returns a blocking response with the suggested replacement
 5. **Claude Integration**: Claude receives the suggestion and automatically retries with the correct command
 
-**Behind the Scenes:**
-```rust
-// Simplified code flow
-let config = load_config(".claude-hook-advisor.toml")?;
-let command = parse_bash_command(&hook_input.tool_input.command);
+**Smart Matching:**
+- Start-of-line matching ensures only primary commands are replaced
+- `npm install` → `bun install` ✅
+- `npx npm` stays unchanged (npm is not the primary command) ✅
+- `npm-check` stays unchanged (different command) ✅
+- Preserves command arguments: `npm install --save` → `bun install --save` ✅
 
-if let Some(replacement) = config.commands.get(&command.base_command) {
-    return Ok(HookResponse::Block {
-        reason: format!("Command '{}' is mapped to '{}'", command.base_command, replacement),
-        suggested_command: command.replace_base_with(replacement),
-    });
-}
-```
-
-**What makes it smart:**
-- Start-of-line matching ensures only primary commands are replaced (e.g., `npm install` → `bun install`, but `npx npm` is unchanged)
-- Prevents false positives with substrings (e.g., `npm` won't match `npm-check` or `my-npm-tool`)
-- Doesn't interfere with subcommands (e.g., `git rm` won't trigger an `rm` mapping)
-- Preserves command arguments (`npm install --save` → `bun install --save`)
-- Fast regex-based pattern matching (~1ms response time)
-
----
-
-### Directory Aliasing (UserPromptSubmit Hook) 📁
+#### 2. UserPromptSubmit Hook - Directory Aliasing 📁
 
 **The Flow:**
 1. **Text Analysis**: Scans user prompts for semantic directory references (e.g., "docs", "project_docs")
@@ -302,68 +153,34 @@ if let Some(replacement) = config.commands.get(&command.base_command) {
 4. **Path Resolution**: Converts semantic references to canonical filesystem paths
 5. **Security Validation**: Performs path canonicalization to prevent traversal attacks
 
-**Behind the Scenes:**
-```rust
-// Pattern detection
-let patterns = [
-    r"\b(docs|documentation)\b",
-    r"\bproject[_\s]docs?\b", 
-    r"\bcentral[_\s]docs?\b"
-];
-
-// Tilde expansion
-let resolved = expand_tilde(path_template)?;
-
-// Security canonicalization
-let canonical = fs::canonicalize(&resolved)?;
-```
-
-**What makes it secure:**
+**Security Features:**
 - Path canonicalization prevents `../../../etc/passwd` attacks
 - Only resolves to configured directories
 - Validates paths exist before resolution
 
----
-
-### Analytics (PostToolUse Hook) 📊
+#### 3. PostToolUse Hook - Analytics & History 📊
 
 **The Flow:**
 1. **Execution Tracking**: Receives command results with success/failure data
-2. **Performance Monitoring**: Tracks command success rates and execution patterns
-3. **Analytics Logging**: Provides insights for optimization and monitoring
+2. **Database Logging**: Stores commands in SQLite with full metadata
+3. **Session Tracking**: Links commands to Claude Code sessions
 
-**Behind the Scenes:**
-```rust
-// Success/failure tracking
-match hook_data.tool_response.exit_code {
-    0 => log::info!("Command '{}' succeeded", command),
-    code => log::warn!("Command '{}' failed (exit: {})", command, code),
-}
-```
+**Failure Detection:**
+Uses a clever two-hook approach:
+- **PreToolUse**: Logs every command Claude *attempts* with status="pending"
+- **PostToolUse**: Updates status to "success" when commands complete
+- Commands remaining "pending" = failed (PostToolUse never fired)
 
-**Future possibilities:**
-- Command success rate analytics
-- Performance optimization suggestions
-- Usage pattern insights
+This workaround handles the limitation where Claude Code doesn't send PostToolUse events for failed commands.
 
-## Command History Tracking
+</details>
 
-Track every Bash command Claude runs in a SQLite database. Commands executed by Claude don't show up in your shell's history, but now you can retrieve them anytime.
+<details>
+<summary><b>Command History Tracking - Detailed Guide</b></summary>
 
 ### Setup
 
-**1. Install/Update the binary:**
-
-If you just cloned or pulled the latest code:
-```bash
-cargo install --path .
-```
-
-If you installed from crates.io, the feature is already available in v0.2.0+.
-
-**2. Enable command history:**
-
-Edit your `.claude-hook-advisor.toml` and add:
+Enable in your `.claude-hook-advisor.toml`:
 
 ```toml
 [command_history]
@@ -371,40 +188,24 @@ enabled = true
 log_file = "~/.claude-hook-advisor/bash-history.db"
 ```
 
-**Or** if you don't have a config file yet, run:
-```bash
-claude-hook-advisor --install
-```
-This creates a config file with command history as a commented example you can uncomment.
-
-**3. That's it!**
-
-The PostToolUse hook (already installed if you ran `--install` before) will automatically start logging commands. No restart needed!
+The PostToolUse hook (installed via `--install-hooks`) will automatically start logging. No restart needed!
 
 ### Viewing History
 
-**Show recent commands:**
 ```bash
+# Show recent commands
 claude-hook-advisor --history
-```
 
-**Show last 50 commands:**
-```bash
+# Show last 50 commands
 claude-hook-advisor --history --limit 50
-```
 
-**Show only failed commands:**
-```bash
+# Show only failed commands
 claude-hook-advisor --history --failures
-```
 
-**Show git commands only:**
-```bash
+# Show git commands only
 claude-hook-advisor --history --pattern git
-```
 
-**Show commands from a specific session:**
-```bash
+# Show commands from a specific session
 claude-hook-advisor --history --session abc123
 ```
 
@@ -417,17 +218,6 @@ Each command record includes:
 - **Exit code**: Success (0) or failure code
 - **Working directory**: Where the command was executed
 - **Session ID**: Link commands to Claude Code sessions
-
-### How Failure Detection Works
-
-The tool uses a clever two-hook approach to track both successful and failed commands:
-
-1. **PreToolUse Hook**: Logs every command Claude *attempts* to run with status="pending"
-2. **PostToolUse Hook**: Updates the status to "success" when commands complete
-
-**Key insight**: PostToolUse hooks only fire for successful commands in Claude Code. Any command that remains with status="pending" means it failed (PostToolUse never fired).
-
-This workaround solves the limitation where Claude Code doesn't send PostToolUse events for failed commands, allowing you to track all command attempts and their outcomes.
 
 ### Example Output
 
@@ -449,36 +239,34 @@ Command History (5 records)
   Command: npm test
   CWD:     /home/user/my-project
   Session: abc123-def456
-
-2025-11-10T14:30:35Z  ✗ FAILED
-  Command: ls /nonexistent
-  CWD:     /home/user/my-project
-  Session: abc123-def456
 ```
 
 ### Use Cases
 
-- **Track failures**: Automatically identify which commands failed without manual checking
+- **Track failures**: Automatically identify which commands failed
 - **Debugging**: "Which commands failed in this session?" - `--history --failures`
-- **Retrieve that perfect command**: "What was that complex curl command Claude ran yesterday?"
-- **Audit trail**: Track all command attempts (successful and failed) for compliance
+- **Retrieve commands**: "What was that complex curl command Claude ran yesterday?"
+- **Audit trail**: Track all command attempts for compliance
 - **Learning**: See what commands Claude tries and which ones work
-- **Identify patterns**: Find commands that consistently fail and need attention
 
-## Security Pattern Detection
+</details>
 
-Claude Hook Advisor includes **27 built-in security patterns** that automatically detect dangerous code patterns when Claude edits files. These patterns are **enabled by default** and cover common vulnerabilities across 10+ programming languages.
+<details>
+<summary><b>Security Pattern Detection - Complete Reference</b></summary>
+
+### Overview
+
+**27 built-in security patterns** automatically detect dangerous code patterns when Claude edits files using `Edit`, `Write`, or `MultiEdit` tools. **Enabled by default** with no configuration needed.
 
 ### How It Works
 
-When Claude tries to edit a file using the `Edit`, `Write`, or `MultiEdit` tools, the PreToolUse hook:
-
+When Claude tries to edit a file, the PreToolUse hook:
 1. **Checks the file path** against glob patterns (e.g., `.github/workflows/*.yml`)
 2. **Scans the content** for dangerous substrings (e.g., `eval(`, `dangerouslySetInnerHTML`)
 3. **Blocks the operation** if a pattern matches and shows a security warning
 4. **Tracks warnings per-session** so each warning is only shown once
 
-This happens transparently - you'll see Claude acknowledge the security warning and then proceed more carefully or ask for your guidance.
+Claude sees the warning and either finds a safer alternative, asks for your guidance, or explains why the risky operation is needed.
 
 ### Built-in Security Patterns
 
@@ -486,7 +274,7 @@ This happens transparently - you'll see Claude acknowledge the security warning 
 - **`eval_injection`**: Detects `eval()` usage that can execute arbitrary code
 - **`new_function_injection`**: Detects `new Function()` code injection risks
 - **`innerHTML_xss`**: Detects `innerHTML` XSS vulnerabilities
-- **`dangerouslySetInnerHTML`**: Detects React XSS risks
+- **`react_dangerously_set_html`**: Detects React `dangerouslySetInnerHTML` XSS risks
 - **`document_write_xss`**: Detects `document.write()` XSS attacks
 - **`child_process_exec`**: Detects command injection via `exec()`/`execSync()`
 
@@ -541,29 +329,19 @@ don't require code evaluation. Only use eval() if you truly need to evaluate
 arbitrary code.
 ```
 
-Claude will see this warning and either:
-- Find a safer alternative approach
-- Ask you if you really want to proceed with the risky pattern
-- Explain why the code needs the potentially dangerous operation
+### Disabling Patterns
 
-### Disabling Security Patterns
-
-All patterns are enabled by default. If a pattern is too noisy for your workflow, disable it in your `.claude-hook-advisor.toml`:
+All patterns are enabled by default. To disable specific patterns:
 
 ```toml
 [security_pattern_overrides]
-# Disable Swift force unwrap warnings (common in Swift code)
-swift_force_unwrap = false
-
-# Disable eval warnings (if you're working on a REPL or interpreter)
-eval_injection = false
+swift_force_unwrap = false      # Common in Swift code
+eval_injection = false          # If working on a REPL
 python_eval = false
-
-# Disable unsafe warnings (if you're doing low-level systems programming)
-rust_unsafe_block = false
+rust_unsafe_block = false       # For systems programming
 ```
 
-**Pattern names:**
+**All pattern names:**
 ```
 github_actions_workflow          github_actions_workflow_yaml
 eval_injection                   new_function_injection
@@ -581,123 +359,114 @@ php_unserialize                  ruby_eval
 ruby_yaml_load
 ```
 
-### Configuration Examples
+</details>
 
-**Disable noisy patterns for Swift development:**
+<details>
+<summary><b>Configuration Examples & Use Cases</b></summary>
+
+### Example Configurations
+
+**Node.js project (prefer bun):**
 ```toml
-[security_pattern_overrides]
-swift_force_unwrap = false  # Force unwrap is very common in Swift
+[commands]
+npm = "bun"
+yarn = "bun"
+npx = "bunx"
 ```
 
-**Disable eval warnings for building a JavaScript REPL:**
+**Python project (prefer uv):**
 ```toml
-[security_pattern_overrides]
-eval_injection = false
-new_function_injection = false
+[commands]
+pip = "uv pip"
+"pip install" = "uv add"
 ```
 
-**Disable unsafe warnings for systems programming:**
+**General tool preferences:**
 ```toml
+[commands]
+curl = "wget --verbose"
+cat = "bat"
+ls = "eza"
+```
+
+**Comprehensive project setup:**
+```toml
+# Command mappings
+[commands]
+npm = "bun"
+yarn = "bun"
+npx = "bunx"
+
+# Semantic directory aliases
+[semantic_directories]
+"project docs" = "~/Documents/Documentation/my-project"
+"central docs" = "~/Documents/Documentation"
+"test data" = "~/Documents/test-data"
+
+# Command history
+[command_history]
+enabled = true
+log_file = "~/.claude-hook-advisor/bash-history.db"
+
+# Disable noisy security patterns for this project
 [security_pattern_overrides]
-rust_unsafe_block = false
+swift_force_unwrap = false
 ```
 
-### Benefits
+### Use Cases
 
-- **Prevent vulnerabilities**: Catch security issues before code is written
-- **Educational**: Learn about security patterns as you code
-- **Zero configuration**: Works out of the box with no setup
-- **Low noise**: Warnings shown once per session per file
-- **Multi-language**: Comprehensive coverage across major languages
+#### Command Intelligence
+- **Package Manager Consistency**: Enforce use of `bun` instead of `npm`/`yarn`
+- **Tool Preferences**: Replace `curl` with `wget`, `cat` with `bat`, etc.
+- **Project Standards**: Ensure consistent tooling across team members
+- **Legacy Migration**: Gradually move from old tools to new ones
 
-## Example Output
+#### Directory Aliasing
+- **Documentation Management**: Use "docs" instead of typing full paths
+- **Project Organization**: Reference "project_docs", "central_docs" naturally
+- **Team Collaboration**: Shared semantic directory references across team members
+- **Workflow Automation**: Natural language directory references in Claude conversations
 
-### Real Claude Code Conversation
+### Configuration File Lookup
 
-Here's what an actual conversation looks like with claude-hook-advisor working:
+The tool looks for configuration files in this order:
+1. Custom path specified with `-c/--config` flag
+2. `.claude-hook-advisor.toml` in current directory
+3. If no config found, allows all commands (no mappings)
 
-**🗣️ You:** "What files are in my docs?"
+</details>
 
-**🤖 Claude:** "⏺ I'll check what files are in your docs directory at /Users/you/Documents/Documentation."
+<details>
+<summary><b>Testing & Development</b></summary>
 
-**Behind the scenes:**
-```
-[DEBUG] UserPromptSubmit hook triggered
-[DEBUG] Pattern matched: 'docs' -> '~/Documents/Documentation'  
-[DEBUG] Path resolved: /Users/you/Documents/Documentation
-```
+### Testing Hooks Directly
 
-**Hook message in Claude:**
-```
-<user-prompt-submit-hook>Directory reference 'docs' resolved to: /Users/you/Documents/Documentation</user-prompt-submit-hook>
-```
-
----
-
-**🗣️ You:** "Install the dependencies for this project"
-
-**🤖 Claude:** "I'll install the dependencies using npm install."
-*(Claude attempts: `npm install`)*
-
-**Hook intercepts:**
-```json
-{
-  "decision": "block",
-  "reason": "Command 'npm' is mapped to 'bun' instead",
-  "suggested_command": "bun install"
-}
-```
-
-**🤖 Claude:** "I'll use bun install instead based on your project preferences."
-*(Claude runs: `bun install`)*
-
-**Result:** Your preferred package manager is used automatically, no manual correction needed!
-
----
-
-### Command Line Testing
-
-**Directory Resolution:**
-```bash
-# Test directory resolution via hook
-echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs directory"}' | claude-hook-advisor --hook
-
-# Expected output:
-# Directory reference 'docs' resolved to: /Users/you/Documents/Documentation
-
-*Note: Directory resolution requires the path to exist on your filesystem.*
-```
-
-**Hook Simulation:**
-```bash
-$ echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check the docs directory"}' | claude-hook-advisor --hook
-<user-prompt-submit-hook>Directory reference 'docs' resolved to: /Users/you/Documents/Documentation</user-prompt-submit-hook>
-
-$ echo '{"session_id":"test","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm install"}}' | claude-hook-advisor --hook
-{
-  "decision": "block", 
-  "reason": "Command 'npm' is mapped to 'bun' instead",
-  "suggested_command": "bun install"
-}
-```
-
-## Development
-
-### Available Make Targets
+Test hooks without Claude Code:
 
 ```bash
+# Test directory resolution
+echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook
+
+# Test command mapping
+echo '{"session_id":"test","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm install"}}' | claude-hook-advisor --hook
+
+# Test PostToolUse hook
+echo '{"session_id":"test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"bun install"},"tool_response":{"exit_code":0}}' | claude-hook-advisor --hook
+```
+
+### Development Commands
+
+```bash
+make test          # Run unit tests
 make build         # Build in debug mode
 make release       # Build in release mode
-make test          # Run tests
 make lint          # Run clippy linting
-make fmt           # Format code
+make fmt           # Format code with rustfmt
 make clean         # Clean build artifacts
-make example-config# Create example config
-make run-example   # Test with example input
-make help          # Show all targets
+make help          # Show all available targets
 ```
 
-### Testing
+### Manual Testing Examples
 
 ```bash
 # Run unit tests
@@ -709,43 +478,27 @@ make run-example
 # Manual testing - Command mapping (PreToolUse)
 echo '{"session_id":"test","transcript_path":"","cwd":"","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"yarn start"}}' | ./target/debug/claude-hook-advisor --hook
 
-# Manual testing - Directory detection (UserPromptSubmit)  
-echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check the docs directory"}' | ./target/debug/claude-hook-advisor --hook
-
-# Manual testing - Analytics (PostToolUse)
-echo '{"session_id":"test","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"bun install"},"tool_response":{"exit_code":0}}' | ./target/debug/claude-hook-advisor --hook
-
-# Test directory resolution with existing config
+# Manual testing - Directory detection (UserPromptSubmit)
 echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check the docs directory"}' | ./target/debug/claude-hook-advisor --hook
 ```
 
-## 🔧 Troubleshooting & Debug
+### Performance Notes
 
-### Understanding Hook Messages
+- **Startup time**: ~1-5ms per hook call
+- **Memory usage**: ~2-3MB per process
+- **File watching**: Configuration is loaded on each hook call (no caching)
+- **Path resolution**: Uses filesystem canonicalization for security
 
-When claude-hook-advisor is working correctly, you'll see these messages in Claude Code:
+</details>
 
-**Directory Resolution:**
-```
-<user-prompt-submit-hook>Directory reference 'docs' resolved to: /Users/you/Documents/Documentation</user-prompt-submit-hook>
-```
+<details>
+<summary><b>Troubleshooting Guide</b></summary>
 
-**Command Suggestions:**
-```
-<pre-tool-use-hook>Command 'npm' mapped to 'bun'. Suggested: bun install</pre-tool-use-hook>
-```
+### Enable Debug Mode
 
-**Execution Tracking:**
-```
-<post-tool-use-hook>Command 'bun install' completed successfully (exit code: 0)</post-tool-use-hook>
-```
+Add `RUST_LOG=debug` to your Claude Code settings for detailed logging:
 
-### Debug Mode
-
-Enable detailed logging to see what's happening behind the scenes:
-
-```bash
-# Add RUST_LOG=debug to your Claude Code settings
+```json
 {
   "hooks": {
     "UserPromptSubmit": { ".*": "RUST_LOG=debug claude-hook-advisor --hook" },
@@ -762,14 +515,19 @@ Enable detailed logging to see what's happening behind the scenes:
 - Variable substitution
 - Security validation
 
-### Common Issues & Solutions
+### Common Issues
 
 #### 🚫 Hooks Not Triggering
 **Problem:** No hook messages appear in Claude Code conversations
 
 **Solutions:**
-1. Verify hook installation by checking your Claude Code settings file
-2. Check `.claude/settings.json` or `.claude/settings.local.json`:
+1. Verify hook installation: Check `.claude/settings.json` or `.claude/settings.local.json`
+2. Ensure binary is in PATH: `which claude-hook-advisor`
+3. Test manually:
+   ```bash
+   echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook
+   ```
+4. Verify hooks are configured:
    ```json
    {
      "hooks": {
@@ -777,11 +535,9 @@ Enable detailed logging to see what's happening behind the scenes:
      }
    }
    ```
-3. Ensure `claude-hook-advisor` is in your PATH: `which claude-hook-advisor`
-4. Test manually: `echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook`
 
 #### 📁 Directory Not Resolved
-**Problem:** "docs" doesn't resolve to the expected path
+**Problem:** Directory aliases don't resolve to expected paths
 
 **Solutions:**
 1. Check configuration file exists: `ls .claude-hook-advisor.toml`
@@ -790,11 +546,15 @@ Enable detailed logging to see what's happening behind the scenes:
    [semantic_directories]
    docs = "~/Documents/Documentation"
    ```
-3. Test resolution via hook: `echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook`
-4. Check file permissions: `ls -la .claude-hook-advisor.toml`
+3. Test resolution:
+   ```bash
+   echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook
+   ```
+4. Ensure path exists on filesystem
+5. Check file permissions: `ls -la .claude-hook-advisor.toml`
 
 #### ⚙️ Commands Not Being Mapped
-**Problem:** `npm` still runs instead of `bun`
+**Problem:** Commands still run with original tool instead of mapped replacement
 
 **Solutions:**
 1. Verify command mapping in config:
@@ -802,12 +562,14 @@ Enable detailed logging to see what's happening behind the scenes:
    [commands]
    npm = "bun"
    ```
-2. Test mapping: `echo '{"session_id":"test","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm install"}}' | claude-hook-advisor --hook`
+2. Test mapping:
+   ```bash
+   echo '{"session_id":"test","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm install"}}' | claude-hook-advisor --hook
+   ```
 3. Remember: Commands only match at the start of the line (by design):
-   - ✅ `npm install` matches and becomes `bun install`
-   - ❌ `npx npm` won't match (npm is not the primary command)
-   - ❌ `npm-check` won't match (different command)
-4. Add debug logging to see pattern matching
+   - ✅ `npm install` → `bun install`
+   - ❌ `npx npm` stays unchanged (npm is not the primary command)
+   - ❌ `npm-check` stays unchanged (different command)
 
 #### 🔒 Permission Issues
 **Problem:** Hook fails with permission errors
@@ -817,61 +579,40 @@ Enable detailed logging to see what's happening behind the scenes:
 2. Check file ownership: `ls -la ~/.cargo/bin/claude-hook-advisor`
 3. Verify PATH includes `~/.cargo/bin`: `echo $PATH`
 
-#### 🐛 Debugging Your Configuration
+#### 📊 Command History Not Logging
+**Problem:** Commands aren't being saved to the database
 
-**Test each component individually:**
+**Solutions:**
+1. Verify command history is enabled in config:
+   ```toml
+   [command_history]
+   enabled = true
+   log_file = "~/.claude-hook-advisor/bash-history.db"
+   ```
+2. Check PostToolUse hook is installed
+3. Verify log file location is writable
+4. Check database file permissions
 
-```bash
-# Test directory resolution via hook
-echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook
+### Understanding Hook Messages
 
-# Test command mapping
-echo '{"session_id":"test","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm install"}}' | claude-hook-advisor --hook
+When working correctly, you'll see these messages in Claude Code:
 
-# Test user prompt analysis
-echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check the docs directory"}' | claude-hook-advisor --hook
-
-# Check configuration by testing resolution
-echo '{"session_id":"test","hook_event_name":"UserPromptSubmit","prompt":"check docs"}' | claude-hook-advisor --hook
+**Directory Resolution:**
+```
+<user-prompt-submit-hook>Directory reference 'docs' resolved to: /Users/you/Documents/Documentation</user-prompt-submit-hook>
 ```
 
-### Performance Notes
+**Command Suggestions:**
+```
+<pre-tool-use-hook>Command 'npm' mapped to 'bun'. Suggested: bun install</pre-tool-use-hook>
+```
 
-- **Startup time:** ~1-5ms per hook call
-- **Memory usage:** ~2-3MB per process  
-- **File watching:** Configuration is loaded on each hook call (no caching)
-- **Path resolution:** Uses filesystem canonicalization for security
+**Execution Tracking:**
+```
+<post-tool-use-hook>Command 'bun install' completed successfully (exit code: 0)</post-tool-use-hook>
+```
 
-## Configuration File Lookup
-
-The tool looks for configuration files in this order:
-
-1. Custom path specified with `-c/--config` flag
-2. `.claude-hook-advisor.toml` in current directory
-3. If no config found, allows all commands (no mappings)
-
-## Use Cases
-
-### Command Intelligence
-- **Package Manager Consistency**: Enforce use of `bun` instead of `npm`/`yarn`
-- **Tool Preferences**: Replace `curl` with `wget`, `cat` with `bat`, etc.
-- **Project Standards**: Ensure consistent tooling across team members
-- **Legacy Migration**: Gradually move from old tools to new ones
-- **Security Policies**: Block dangerous commands or redirect to safer alternatives
-
-### Directory Aliasing
-- **Documentation Management**: Use "docs" instead of typing full paths
-- **Project Organization**: Reference "project_docs", "central_docs" naturally
-- **Cross-Platform Paths**: Abstract away platform-specific directory structures
-- **Team Collaboration**: Shared semantic directory references across team members
-- **Workflow Automation**: Natural language directory references in Claude conversations
-
-## Similar Tools
-
-This tool is inspired by and similar to:
-- Shell aliases (but works at the Claude Code level)
-- Git hooks (but for command execution)
-- Package manager configuration files
+</details>
 
 ## Support
 
@@ -879,4 +620,6 @@ If you find this tool useful, consider supporting its development:
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/A0A01HT0RG)
 
----
+## Inspiration
+
+The security pattern detection feature was inspired by Claude Code itself. While building this tool, I noticed how Claude Code implements its own security checks and validation patterns to protect users from dangerous operations. This inspired me to bring similar protective capabilities to custom hooks, allowing the community to extend Claude Code's safety mechanisms in their own workflows.
